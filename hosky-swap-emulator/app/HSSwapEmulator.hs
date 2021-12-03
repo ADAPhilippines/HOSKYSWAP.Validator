@@ -6,6 +6,7 @@
 module HSSwapEmulator
     (runEmulator
     , test
+    , getPKH
     ) where
 
 
@@ -78,3 +79,6 @@ runEmulator = do
 
 test :: Value
 test = lovelaceValueOf 2 Plutus.<> Value.singleton lovelaceCS lovelaceTN 5
+
+getPKH :: Integer -> PubKeyHash
+getPKH = pubKeyHash . Wallet.walletPubKey . wallet

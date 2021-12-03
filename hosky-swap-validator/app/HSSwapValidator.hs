@@ -55,7 +55,7 @@ mkValidator d _ ctx =
         minPrice =
             let
                 fromAssetAmt = case findOwnInput ctx of
-                    Nothing -> traceError "own input not found"
+                    Nothing -> traceError "Own input not found"
                     Just i  -> assetClassValueOf (txOutValue $ txInInfoResolved i) (sFromAsset d)
             in
                 price fromAssetAmt (sRate d)
@@ -75,7 +75,7 @@ mkValidator d _ ctx =
                 pricePaid = Ada.getLovelace $ Ada.fromValue $ valuePaidTo info adminPKH
             in
                 pricePaid P.>= 2 * 694200
-                
+
         hasOneValidatorInput :: Bool
         hasOneValidatorInput =
             let

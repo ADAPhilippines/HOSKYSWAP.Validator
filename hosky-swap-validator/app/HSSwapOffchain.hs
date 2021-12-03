@@ -66,7 +66,7 @@ executeSwap = do
         Nothing           -> logInfo @String "swap not found"
         Just (oref, o, d) -> do
             let p       =   assetClassValue (sToAsset d) $ price (assetClassValueOf (txOutValue $ toTxOut o) (sFromAsset d)) (sRate d)
-                feeValue     =   lovelaceValueOf (2 * 69420)
+                feeValue     =   lovelaceValueOf (2 * 694200)
                 lookups =   Constraints.otherScript hsSwapValidator                                     
                             <> Constraints.unspentOutputs (Map.fromList [(oref, o)])
                 tx      =   Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ()) 

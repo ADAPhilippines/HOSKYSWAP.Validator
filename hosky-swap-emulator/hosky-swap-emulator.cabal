@@ -46,5 +46,6 @@ library
                         , plutus-contract
                         , text
                         , hosky-swap-validator
+                        , cardano-prelude
 
     ghc-options:        -fobject-code -fno-ignore-interface-pragmas -fno-omit-interface-pragmas
