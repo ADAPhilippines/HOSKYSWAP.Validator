@@ -40,9 +40,12 @@ import qualified    Plutus.V1.Ledger.Ada as Ada
 mkValidator :: SwapInfo -> BuiltinData -> ScriptContext -> P.Bool
 mkValidator d _ ctx =
     hasSellerSigned |||
+    -- ( traceIfFalse "Cannot have more than 1 validator" hasOneValidatorInput &&&
+    --   traceIfFalse "Seller not paid" isSellerPaid &&&
+    --   traceIfFalse "Fees not paid" isFeePaid )
+
     ( traceIfFalse "Cannot have more than 1 validator" hasOneValidatorInput &&&
-      traceIfFalse "Seller not paid" isSellerPaid &&&
-      traceIfFalse "Fees not paid" isFeePaid )
+      traceIfFalse "Seller not paid" isSellerPaid)
 
     where
         info :: TxInfo

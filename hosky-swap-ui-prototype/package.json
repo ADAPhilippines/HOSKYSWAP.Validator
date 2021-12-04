@@ -1,0 +1,27 @@
+{
+  "name": "cardanoserilizationlibtest",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "webpack --progress --mode development",
+    "watch": "webpack --progress --watch --mode development",
+    "init": "tsc --init",
+    "start": "serve ./wwwroot"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@emurgo/cardano-serialization-lib-browser": "^10.0.0-beta.8",
+    "buffer": "^6.0.3",
+    "cbor": "^8.1.0"
+  },
+  "devDependencies": {
+    "copy-webpack-plugin": "^10.0.0",
+    "serve": "^13.0.2",
+    "ts-loader": "^9.2.6",
+    "typescript": "^4.5.2",
+    "webpack": "^5.64.4",
+    "webpack-cli": "^4.9.1"
+  }
+}
