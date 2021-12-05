@@ -67,11 +67,11 @@ runEmulator = do
         callEndpoint @"offer" h1 OfferSwapParams
             {hsSwap = SwapInfo
                     { sRate = 1_000_000
-                    , sFromAsset = dummyAsset
-                    , sToAsset = lovelaceAsset
+                    , sFromAsset = lovelaceAsset
+                    , sToAsset = dummyAsset
                     , sSeller = pubKeyHash $ Wallet.walletPubKey $ wallet 1
                     }
-            , amount = 50_000_000
+            , amount = 10_000_000
             } 
         void $ Emulator.waitNSlots 3
         callEndpoint @"execute" h2 ()

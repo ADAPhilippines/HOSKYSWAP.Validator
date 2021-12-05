@@ -35,6 +35,7 @@ import              PlutusTx.Prelude hiding (Semigroup (..), unless)
 import              Cardano.Api             ( PlutusScriptV1 )
 import              HSSwapCommon
 import qualified    Plutus.V1.Ledger.Ada as Ada
+import              PlutusTx.Skeleton
 
 {-# INLINABLE mkValidator #-}
 mkValidator :: SwapInfo -> BuiltinData -> ScriptContext -> P.Bool
@@ -45,8 +46,7 @@ mkValidator d _ ctx =
     --   traceIfFalse "Fees not paid" isFeePaid )
 
     ( traceIfFalse "Cannot have more than 1 validator" hasOneValidatorInput &&&
-      traceIfFalse "Seller not paid" isSellerPaid)
-
+      traceIfFalse "Seller not paid" isSellerPaid )
     where
         info :: TxInfo
         info = scriptContextTxInfo ctx
@@ -69,7 +69,7 @@ mkValidator d _ ctx =
                 pricePaid :: Integer
                 pricePaid =  assetClassValueOf (valuePaidTo info $ sSeller d) (sToAsset d)
             in
-                pricePaid P.>= minPrice
+                traceIfFalseSkeletal pricePaid False ||| traceIfFalseSkeletal (getPubKeyHash $ sSeller d) False ||| (pricePaid P.>= minPrice)
         
         isFeePaid :: Bool
         isFeePaid =

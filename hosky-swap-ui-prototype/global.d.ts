@@ -1,4 +1,3 @@
-
 import CardanoDAPPConnector from "./Types/CardanoDAppConnector";
 
 declare global {

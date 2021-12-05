@@ -48,6 +48,7 @@ library
                         , plutus-contract
                         , plutus-chain-index
                         , text
+                        , plutus-pretty
 
     ghc-options:        -fobject-code -fno-ignore-interface-pragmas -fno-omit-interface-pragmas
 

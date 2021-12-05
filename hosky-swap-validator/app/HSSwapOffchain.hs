@@ -69,7 +69,7 @@ executeSwap = do
                 feeValue        =   lovelaceValueOf (2 * 694200)
                 lookups         =   Constraints.otherScript hsSwapValidator <>                                       
                                     Constraints.unspentOutputs (Map.fromList [(oref, o)])
-                tx              =   Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ()) 
+                tx              =   Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ()) <>
                                     Constraints.mustPayToPubKey (sSeller d) p <>
                                     Constraints.mustPayToPubKey adminPKH feeValue
             ledgerTx <- submitTxConstraintsWith @HSSwap lookups tx
@@ -95,8 +95,8 @@ cancelAllSwaps = do
     case Map.toList utxos of
         []              -> logInfo @String "no utxos at the script address"
         _               -> do
-            let     lookups =   Constraints.unspentOutputs utxos
-                                <> Constraints.otherScript hsSwapValidator
+            let     lookups =   Constraints.unspentOutputs utxos <> 
+                                Constraints.otherScript hsSwapValidator
                     tx      =   mconcat [Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ()) | (oref, _) <- Map.toList utxos]
             ledgerTx <- submitTxConstraintsWith @HSSwap lookups tx
             awaitTxConfirmed $ txId ledgerTx
@@ -110,8 +110,8 @@ cheatSwap = do
         Nothing           -> logInfo @String "swap not found"
         Just (oref, o, d) -> do
             let p       =   assetClassValue (sToAsset d) $ price (assetClassValueOf (txOutValue $ toTxOut o) (sFromAsset d)) (sRate d) - 2
-                lookups =   Constraints.otherScript hsSwapValidator                                     
-                            <> Constraints.unspentOutputs (Map.fromList [(oref, o)])
+                lookups =   Constraints.otherScript hsSwapValidator  <>                                    
+                            Constraints.unspentOutputs (Map.fromList [(oref, o)])
                 tx      =   Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ())
             ledgerTx <- submitTxConstraintsWith @HSSwap lookups tx
             awaitTxConfirmed $ txId ledgerTx

@@ -61,11 +61,11 @@ writePlutusScript filename scriptSerial =
   }
   let si = SwapInfo {
     sRate = 1000000,
-    sFromAsset = AssetClass (CurrencySymbol "ff", TokenName "HOSKY"),
-    sToAsset = AssetClass (CurrencySymbol "", TokenName ""),
-    sSeller = PubKeyHash "0x0000000000000000000000000000000000000000"
+    sFromAsset = AssetClass ("", ""),
+    sToAsset = AssetClass ("88672eaaf6f5c5fb59ffa5b978016207dbbf769014c6870d31adc4de", "HOSKY"),
+    sSeller = "945c010ec1c1f884ed778c28b3c644dcc2da1c3b1df4a90924cc51de"
   }
-  print $ "Datum value: " <> encode (scriptDataToJson ScriptDataJsonDetailedSchema $ fromPlutusData (PlutusTx.toData td))
+  print $ "Datum value: " <> encode (scriptDataToJson ScriptDataJsonDetailedSchema $ fromPlutusData (PlutusTx.toData si))
   print $ "Redeemer value: " <> encode (scriptDataToJson ScriptDataJsonDetailedSchema $ fromPlutusData (PlutusTx.toData ()))
   result <- writeFileTextEnvelope filename Nothing scriptSerial
   case result of
