@@ -139,7 +139,6 @@ async function BuildSwapTxAsync() {
             )
         );
 
-
         const hoskyValue = Cardano.Value.new(toBigNum("1344798"));
         const hoskyMA = Cardano.MultiAsset.new();
         const hoskyAssets = Cardano.Assets.new();
@@ -148,7 +147,6 @@ async function BuildSwapTxAsync() {
             Cardano.AssetName.new(fromHex("484f534b59")),
             toBigNum("10000000")
         );
-
 
         hoskyMA.insert(
             Cardano.ScriptHash.from_bytes(fromHex("88672eaaf6f5c5fb59ffa5b978016207dbbf769014c6870d31adc4de")),
@@ -176,12 +174,15 @@ async function BuildSwapTxAsync() {
         const collateralInputs = Cardano.TransactionInputs.new();
         collateralUnspentTransactions.forEach(c => collateralInputs.add(c.input()));
         transactionBody.set_collateral(collateralInputs);
-        
+
+        const auxData = Cardano.AuxiliaryData.new();
+        auxData.set_plutus_scripts(ContractScript() as PlutusScripts);
         const transaction = Cardano.Transaction.new(
             Cardano.TransactionBody.from_bytes(transactionBody.to_bytes()),
             Cardano.TransactionWitnessSet.from_bytes(
                 transactionWitnessSet.to_bytes()
-            )
+            ),
+            auxData
         );
 
         const serializedTx = toHex(transaction.to_bytes());
@@ -198,7 +199,8 @@ async function BuildSwapTxAsync() {
             Cardano.TransactionBody.from_bytes(transactionBody.to_bytes()),
             Cardano.TransactionWitnessSet.from_bytes(
                 transactionWitnessSet.to_bytes()
-            )
+            ),
+            auxData
         );
 
         console.log("Full Tx Size", signedTx.to_bytes().length);
