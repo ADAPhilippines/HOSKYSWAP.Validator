@@ -17,8 +17,8 @@ async function Main() {
 
 async function ExecuteContract() {
     try {
-        await BuildOfferTxAsync();
-        // await BuildSwapTxAsync();
+        // await BuildOfferTxAsync();
+        await BuildSwapTxAsync();
     } catch (e) {
         console.dir(e);
     }
@@ -43,15 +43,16 @@ async function BuildOfferTxAsync() {
         txBuilder.add_input(
             selfAddress,
             Cardano.TransactionInput.new(
-                Cardano.TransactionHash.from_bytes(fromHex("8672b1e326510e47039e71a5e1770196da8e64bc4faa1713ff3c63a654727a45")), 0
+                Cardano.TransactionHash.from_bytes(fromHex("890c4702a2bd489433831894bc6b64484a046339c3721b59368630bb1ad22ef0")), 0
             ),
-            Cardano.Value.new(toBigNum("15000000"))
+            Cardano.Value.new(toBigNum("20000000"))
         );
 
         const contractOutput = Cardano.TransactionOutput.new(
             ContractAddress() as Address,
-            Cardano.Value.new(toBigNum("10000000"))
+            Cardano.Value.new(toBigNum("12394200"))
         );
+
         contractOutput.set_data_hash(datumHash);
 
         txBuilder.add_output(contractOutput);
@@ -99,20 +100,21 @@ async function BuildSwapTxAsync() {
         const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
         const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
         const pkh = "3e4a2ec70fcef9e54c437a173714d1f82b96242379816bea3dd387dd";
+
         const scriptInput =  Cardano.TransactionInput.new(
-            Cardano.TransactionHash.from_bytes(fromHex("e2cf543405a6e479e97216a80df6bafc0bd47fed81e04e830ec82875acb07c05")), 0
+            Cardano.TransactionHash.from_bytes(fromHex("cc0e38fa488d9d4ed2f57b151f70a96f74eda7fa3f6cdfd1f8765162f13bdfc1")), 0
         );
 
         txBuilder.add_input(
             ContractAddress() as Address,
             scriptInput,
-            Cardano.Value.new(toBigNum("10000000"))
+            Cardano.Value.new(toBigNum("12394200"))
         );
 
         txBuilder.add_input(
             selfAddress,
             Cardano.TransactionInput.new(
-                Cardano.TransactionHash.from_bytes(fromHex("ba5ba7e6bc259418fe16f8d41216f52ea64e9ca6b655d9202f9f7d08fba146fa")), 0
+                Cardano.TransactionHash.from_bytes(fromHex("b8242caaa5f1316bdf2e10cc9037a281721b94a9e4abb12cac6f3ed31b86c91e")), 0
             ),
             AssetValue(
                 toBigNum("5000000"),
@@ -132,6 +134,11 @@ async function BuildSwapTxAsync() {
                 "484f534b59",
                 toBigNum("10000000")
             ) as Value
+        ));
+
+        txBuilder.add_output(Cardano.TransactionOutput.new(
+            Cardano.Address.from_bech32("addr_test1qp99g3msu76sg2g2xl996lqnvxkanygpkvf49g6evg693ehq5gyu2ypuw7k3lfmrpmsdk9qwnw9pw0vp7gg6rr5qkd9qqw0ela"),
+            Cardano.Value.new(toBigNum("1388400"))
         ));
 
         const requiredSigners = Cardano.Ed25519KeyHashes.new();
@@ -277,8 +284,8 @@ const SimpleRedeemer = (index: number) => {
             toBigNum(index),
             redeemerData,
             Cardano.ExUnits.new(
-                Cardano.BigNum.from_str("7000000"),
-                Cardano.BigNum.from_str("3000000000")
+                Cardano.BigNum.from_str("1754991"),
+                Cardano.BigNum.from_str("652356532")
             )
         )
     }
@@ -322,7 +329,7 @@ const GetCollateralUnspentTransactionOutputAsync = async () => {
 const ContractAddress = () => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-        return Cardano.Address.from_bech32("addr_test1wprv487mrt6am4se9vlrjq6dwqacue8hvptax5ssj65865ca8f97v")
+        return Cardano.Address.from_bech32("addr_test1wp8qttdrd4qqvnpnuhmzlqlecnmt7wn3u4erlkncu3y9fhgx4yltu")
     }
 }
 
