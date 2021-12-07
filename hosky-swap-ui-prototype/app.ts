@@ -30,7 +30,7 @@ async function BuildOfferTxAsync() {
         if (!await window.cardano.isEnabled()) await window.cardano.enable();
 
         const txBuilder = await CreateTransactionBuilderAsync() as TransactionBuilder;
-        const selfAddress = Cardano.Address.from_bech32("addr_test1qqly5tk8pl80ne2vgdapwdc568uzh93yyducz6l28hfc0htkdqgkydtswrycyf9hruerftc8mwel9ck6pksvyszs968qhauh2s");
+        const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
         const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
         const pkh = toHex(baseAddress.payment_cred().to_keyhash()?.to_bytes() as Uint8Array);
 
@@ -43,9 +43,9 @@ async function BuildOfferTxAsync() {
         txBuilder.add_input(
             selfAddress,
             Cardano.TransactionInput.new(
-                Cardano.TransactionHash.from_bytes(fromHex("ca49c8f1f95f8c5e0901feb70a07645f15858a6965a2620ae532c8cf7d8786ec")), 1
+                Cardano.TransactionHash.from_bytes(fromHex("8672b1e326510e47039e71a5e1770196da8e64bc4faa1713ff3c63a654727a45")), 0
             ),
-            Cardano.Value.new(toBigNum("14830099"))
+            Cardano.Value.new(toBigNum("15000000"))
         );
 
         const contractOutput = Cardano.TransactionOutput.new(
@@ -56,7 +56,7 @@ async function BuildOfferTxAsync() {
 
         txBuilder.add_output(contractOutput);
 
-        txBuilder.add_change_if_needed(Cardano.Address.from_bech32("addr_test1qqly5tk8pl80ne2vgdapwdc568uzh93yyducz6l28hfc0htkdqgkydtswrycyf9hruerftc8mwel9ck6pksvyszs968qhauh2s"));
+        txBuilder.add_change_if_needed(selfAddress);
 
         const txBody = txBuilder.build();
 
