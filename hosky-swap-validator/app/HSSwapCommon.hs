@@ -50,6 +50,7 @@ data ContractInfo = ContractInfo
     { ciAdminPKH        :: !PubKeyHash
     , ciRugPullFee      :: !Integer
     , ciMinUtxoLovelace :: !Integer
+    , ciSellerFeeShare  :: !Integer
     } deriving (Pr.Show, Pr.Eq, Generic, ToJSON, FromJSON)
 
 PlutusTx.makeIsDataIndexed ''ContractInfo [('ContractInfo, 0)]
@@ -60,6 +61,7 @@ contractInfo = ContractInfo
     { ciAdminPKH        = "6ad510fe5e2eff4f367475f01ab79dc4cd1f2600bda02ab270577637"
     , ciRugPullFee      = 694_200
     , ciMinUtxoLovelace = 1_500_000
+    , ciSellerFeeShare  = 200_000
     }
 
 {-# INLINABLE price #-}

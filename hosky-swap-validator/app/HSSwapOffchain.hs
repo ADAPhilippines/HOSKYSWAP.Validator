@@ -46,7 +46,9 @@ offerSwap params = do
     let swap            =   hsSwap params
         amt             =   amount params
         minUtxoLovelace =   ciMinUtxoLovelace contractInfo
-        additional      =   if siFromAsset swap P./= AssetClass (adaSymbol, adaToken) then minUtxoLovelace else 0
+        rugPullFee      =   ciRugPullFee contractInfo
+        share           =   ciSellerFeeShare contractInfo
+        additional      =   minUtxoLovelace + rugPullFee + share
         totalValue      =   assetClassValue (siFromAsset swap) amt <> lovelaceValueOf additional
         tx              =   Constraints.mustPayToTheScript swap totalValue
     ledgerTx <- submitTxConstraints (hsSwapInstance contractInfo) tx
@@ -80,9 +82,11 @@ executeSwap si = do
                 Just (oref, o, d)   -> do
                     let adminPKH            =   ciAdminPKH contractInfo
                         rugPullFee          =   ciRugPullFee contractInfo
+                        feeShare            =   ciSellerFeeShare contractInfo
                         minUtxoLovelace     =   ciMinUtxoLovelace contractInfo
-                        additionalLovelace  =   if siToAsset d == AssetClass(adaSymbol, adaToken) then (-rugPullFee) else minUtxoLovelace
-                        swapPrice           =   price (assetClassValueOf (txOutValue $ toTxOut o) (siFromAsset d)) (siRate d)
+                        additionalLovelace  =   minUtxoLovelace
+                        adjustments         =   if siFromAsset d == AssetClass (adaSymbol, adaToken) then minUtxoLovelace + rugPullFee + feeShare else 0
+                        swapPrice           =   price (assetClassValueOf (txOutValue $ toTxOut o) (siFromAsset d)) (siRate d) - adjustments
                         p                   =   assetClassValue (siToAsset d) swapPrice                                         <>
                                                 lovelaceValueOf additionalLovelace
                         feeValue            =   lovelaceValueOf $ 2 * rugPullFee
@@ -134,12 +138,25 @@ cheatSwap si = do
         [] -> logInfo @String "No swaps found"
         xs -> do
             case head xs of
-                Nothing           -> logInfo @String "swap not found"
-                Just (oref, o, d) -> do
-                    let p       =   assetClassValue (siToAsset d) $ price (assetClassValueOf (txOutValue $ toTxOut o) (siFromAsset d)) (siRate d) - 2
-                        lookups =   Constraints.otherScript hsSwapValidator  <>
-                                    Constraints.unspentOutputs (Map.fromList [(oref, o)])
-                        tx      =   Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ())
+                Nothing             -> logInfo @String "swap not found"
+                Just (oref, o, d)   -> do
+                    let adminPKH            =   ciAdminPKH contractInfo
+                        rugPullFee          =   ciRugPullFee contractInfo
+                        feeShare            =   ciSellerFeeShare contractInfo
+                        minUtxoLovelace     =   ciMinUtxoLovelace contractInfo
+                        additionalLovelace  =   minUtxoLovelace
+                        adjustments         =   if siFromAsset d == AssetClass (adaSymbol, adaToken) then minUtxoLovelace + rugPullFee + feeShare else 0
+                        swapPrice           =   price (assetClassValueOf (txOutValue $ toTxOut o) (siFromAsset d)) (siRate d) - adjustments
+                        p                   =   assetClassValue (siToAsset d) swapPrice                                         <>
+                                                lovelaceValueOf additionalLovelace
+                        feeValue            =   lovelaceValueOf $ 2 * rugPullFee - 1
+                        lookups             =   Constraints.otherScript hsSwapValidator                                         <>
+                                                Constraints.unspentOutputs (Map.fromList [(oref, o)])
+                        tx                  =   Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ())   <>
+                                                Constraints.mustPayToPubKey (siSeller d) p                                      <>
+                                                Constraints.mustPayToPubKey adminPKH feeValue
+                    logInfo @String $ "Paying" P.++ show (Value.flattenValue p) P.++ "to the Seller"
+                    logInfo @String $ "Paying swap fee of" P.++ show (Value.flattenValue feeValue)
                     ledgerTx <- submitTxConstraintsWith @HSSwap lookups tx
                     awaitTxConfirmed $ txId ledgerTx
                     logInfo @String $ "cheated swap with price " P.++ show (Value.flattenValue p)

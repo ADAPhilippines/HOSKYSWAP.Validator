@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module HSSwapEmulator
-    (runEmulator
+    ( runEmulator
     , getPKH
     ) where
 
@@ -44,7 +44,7 @@ dummyAsset :: AssetClass
 dummyAsset = AssetClass (dummyCS, dummyTN)
 
 dummyTN2 :: TokenName
-dummyTN2 = "CLV"
+dummyTN2 = "USDT"
 
 dummyCS2 :: CurrencySymbol
 dummyCS2 = "ee"
@@ -55,7 +55,7 @@ dummyAsset2 = AssetClass (dummyCS2, dummyTN2)
 wallet :: Integer -> Wallet
 wallet = fromWalletNumber . WalletNumber
 
-swap1 :: SwapInfo -- trading ADA to HOSKY at 1 ADA / 1_000_000 HOSKY
+swap1 :: SwapInfo -- trading ADA to HOSKY at 0.00000095 $ADA/$HOSKY
 swap1 = SwapInfo  { siRate = 1_000_000
                   , siFromAsset = lovelaceAsset
                   , siToAsset = dummyAsset
@@ -84,9 +84,9 @@ runEmulator = do
     emCfg = EmulatorConfig (Left $ Map.fromList [(wallet i, v) | i <- [1..3]]) def def
 
     v :: Value
-    v = Ada.lovelaceValueOf                     100_000_000 <>
-        Value.singleton dummyCS dummyTN         100_000_000 <>
-        Value.singleton dummyCS2 dummyTN2       100_000_000
+    v = Ada.lovelaceValueOf                     15_000_000 <>
+        Value.singleton dummyCS dummyTN         15_000_000 <>
+        Value.singleton dummyCS2 dummyTN2       15_000_000
 
     myTrace :: EmulatorTrace ()
     myTrace = do
@@ -94,11 +94,11 @@ runEmulator = do
         h2 <- activateContractWallet (wallet 2) endpoints
         void $ Emulator.waitNSlots 1
         callEndpoint @"offer" h1 OfferSwapParams
-            { hsSwap = swap3
-            , amount = 50_000_000
+            { hsSwap = swap1
+            , amount = 10_000_000
             }
         void $ Emulator.waitNSlots 1
-        callEndpoint @"execute" h2 swap3
+        callEndpoint @"execute" h2 swap1
         void $ Emulator.waitNSlots 1
 
 getPKH :: Integer -> PubKeyHash
