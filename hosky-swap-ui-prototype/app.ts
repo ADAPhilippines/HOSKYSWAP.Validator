@@ -17,8 +17,8 @@ async function Main() {
 
 async function ExecuteContract() {
     try {
-        // await BuildOfferTxAsync();
-        await BuildSwapTxAsync();
+        await BuildOfferTxAsync();
+        // await BuildSwapTxAsync();
     } catch (e) {
         console.dir(e);
     }
@@ -36,22 +36,16 @@ async function BuildOfferTxAsync() {
 
         const transactionWitnessSet = Cardano.TransactionWitnessSet.new();
         const datumHash = Cardano.hash_plutus_data(HoskySwapDatum(pkh) as PlutusData);
-        console.log(toHex(datumHash.to_bytes()));
+
+        console.log("datumHash", toHex(datumHash.to_bytes()));
+        console.log("pkh", pkh);
 
         txBuilder.add_input(
             selfAddress,
             Cardano.TransactionInput.new(
-                Cardano.TransactionHash.from_bytes(fromHex("8fd6506725b07ab970020049cd388c56702561e67f3e762550908e31307053b8")), 0
+                Cardano.TransactionHash.from_bytes(fromHex("ca49c8f1f95f8c5e0901feb70a07645f15858a6965a2620ae532c8cf7d8786ec")), 1
             ),
-            Cardano.Value.new(toBigNum("10000000"))
-        );
-
-        txBuilder.add_input(
-            selfAddress,
-            Cardano.TransactionInput.new(
-                Cardano.TransactionHash.from_bytes(fromHex("c019adb3dd6e30beb8786f2fa3eb7c1ff0393c5d2099d02ccb412b0269e8f649")), 0
-            ),
-            Cardano.Value.new(toBigNum("15000000"))
+            Cardano.Value.new(toBigNum("14830099"))
         );
 
         const contractOutput = Cardano.TransactionOutput.new(
