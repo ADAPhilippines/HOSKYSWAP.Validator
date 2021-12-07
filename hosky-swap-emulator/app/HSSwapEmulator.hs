@@ -5,7 +5,6 @@
 
 module HSSwapEmulator
     (runEmulator
-    , test
     , getPKH
     ) where
 
@@ -13,14 +12,13 @@ module HSSwapEmulator
 
 import              PlutusTx.Prelude        as Plutus
 import              Plutus.Trace.Emulator   as Emulator
-import              Plutus.V1.Ledger.Ada    (lovelaceValueOf)
 import              Wallet.Emulator.Wallet  as Wallet
 import              Ledger
 import              Ledger.Value            as Value
 import qualified    Ledger.Ada              as Ada
-import              Data.Default            (def)
 
-import              Prelude                 (IO, print)
+import qualified    Prelude                 as Haskell
+import              Data.Default            (def)
 import qualified    Data.Map                as Map
 import              Control.Monad           (void)
 
@@ -28,27 +26,57 @@ import              HSSwapOffchain
 import              HSSwapCommon
 
 lovelaceTN :: TokenName
-lovelaceTN = TokenName ""
+lovelaceTN = ""
 
 lovelaceCS :: CurrencySymbol
-lovelaceCS = CurrencySymbol ""
+lovelaceCS = ""
 
 lovelaceAsset :: AssetClass
 lovelaceAsset = AssetClass (lovelaceCS, lovelaceTN)
 
 dummyTN :: TokenName
-dummyTN = TokenName "HOSKY"
+dummyTN = "HOSKY"
 
 dummyCS :: CurrencySymbol
-dummyCS = CurrencySymbol "ff"
+dummyCS = "ff"
 
 dummyAsset :: AssetClass
 dummyAsset = AssetClass (dummyCS, dummyTN)
 
+dummyTN2 :: TokenName
+dummyTN2 = "CLV"
+
+dummyCS2 :: CurrencySymbol
+dummyCS2 = "ee"
+
+dummyAsset2 :: AssetClass
+dummyAsset2 = AssetClass (dummyCS2, dummyTN2)
+
 wallet :: Integer -> Wallet
 wallet = fromWalletNumber . WalletNumber
 
-runEmulator :: IO()
+swap1 :: SwapInfo -- trading ADA to HOSKY at 1 ADA / 1_000_000 HOSKY
+swap1 = SwapInfo  { siRate = 1_000_000
+                  , siFromAsset = lovelaceAsset
+                  , siToAsset = dummyAsset
+                  , siSeller = pubKeyHash $ Wallet.walletPubKey $ wallet 1
+                  }
+
+swap2 :: SwapInfo -- trading HOSKY to ADA at 1 ADA / 1_000_000 HOSKY
+swap2 = SwapInfo  { siRate = 1_000_000
+                  , siFromAsset = dummyAsset
+                  , siToAsset = lovelaceAsset
+                  , siSeller = pubKeyHash $ Wallet.walletPubKey $ wallet 1
+                  }
+
+swap3 :: SwapInfo -- trading HOSKY to HOSKY2 at 1 HOSKY / 1 HOSKY2
+swap3 = SwapInfo  { siRate = 1_000_000
+                  , siFromAsset = dummyAsset
+                  , siToAsset = dummyAsset2
+                  , siSeller = pubKeyHash $ Wallet.walletPubKey $ wallet 1
+                  }
+
+runEmulator :: Haskell.IO()
 runEmulator = do
     runEmulatorTraceIO' def emCfg myTrace
   where
@@ -56,29 +84,22 @@ runEmulator = do
     emCfg = EmulatorConfig (Left $ Map.fromList [(wallet i, v) | i <- [1..3]]) def def
 
     v :: Value
-    v = Ada.lovelaceValueOf                 100_000_000 <>
-        Value.singleton dummyCS dummyTN     100_000_000
+    v = Ada.lovelaceValueOf                     100_000_000 <>
+        Value.singleton dummyCS dummyTN         100_000_000 <>
+        Value.singleton dummyCS2 dummyTN2       100_000_000
 
     myTrace :: EmulatorTrace ()
     myTrace = do
         h1 <- activateContractWallet (wallet 1) endpoints
         h2 <- activateContractWallet (wallet 2) endpoints
-        void $ Emulator.waitNSlots 3
+        void $ Emulator.waitNSlots 1
         callEndpoint @"offer" h1 OfferSwapParams
-            {hsSwap = SwapInfo
-                    { sRate = 1_000_000
-                    , sFromAsset = lovelaceAsset
-                    , sToAsset = dummyAsset
-                    , sSeller = pubKeyHash $ Wallet.walletPubKey $ wallet 1
-                    }
-            , amount = 10_000_000
-            } 
-        void $ Emulator.waitNSlots 3
-        callEndpoint @"execute" h2 ()
-        void $ Emulator.waitNSlots 3
-
-test :: Value
-test = lovelaceValueOf 2 Plutus.<> Value.singleton lovelaceCS lovelaceTN 5
+            { hsSwap = swap3
+            , amount = 50_000_000
+            }
+        void $ Emulator.waitNSlots 1
+        callEndpoint @"execute" h2 swap3
+        void $ Emulator.waitNSlots 1
 
 getPKH :: Integer -> PubKeyHash
 getPKH = pubKeyHash . Wallet.walletPubKey . wallet
