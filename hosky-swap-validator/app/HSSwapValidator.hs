@@ -1,16 +1,16 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
-
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE DeriveAnyClass      #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE NoImplicitPrelude   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE NumericUnderscores  #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
 -- This example is taken directly from cardano-api, written by Jordan Millar, IOHK
 
 module HSSwapValidator
@@ -38,38 +38,54 @@ import qualified    Plutus.V1.Ledger.Ada as Ada
 import              PlutusTx.Skeleton
 
 {-# INLINABLE mkValidator #-}
-mkValidator :: SwapInfo -> BuiltinData -> ScriptContext -> P.Bool
-mkValidator d _ ctx =
+mkValidator :: ContractInfo -> SwapInfo -> BuiltinData -> ScriptContext -> P.Bool
+mkValidator ci d _ ctx =
     hasSellerSigned |||
-    -- ( traceIfFalse "Cannot have more than 1 validator" hasOneValidatorInput &&&
-    --   traceIfFalse "Seller not paid" isSellerPaid &&&
-    --   traceIfFalse "Fees not paid" isFeePaid )
+    (traceIfFalse   "Cannot have more than 1 validator" hasOneValidatorInput &&&
+    traceIfFalse    "Seller not paid"                   isSellerPaid &&&
+    traceIfFalse    "Fees not paid"                     isFeePaid )
 
-    ( traceIfFalse "Cannot have more than 1 validator" hasOneValidatorInput &&&
-      traceIfFalse "Seller not paid" isSellerPaid )
     where
         info :: TxInfo
         info = scriptContextTxInfo ctx
 
+        rugPullFee :: Integer
+        rugPullFee = ciRugPullFee ci
+
+        minUtxoLovelace :: Integer
+        minUtxoLovelace = ciMinUtxoLovelace ci
+
+        adminPKH :: PubKeyHash
+        adminPKH = ciAdminPKH ci
+
         hasSellerSigned :: Bool
-        hasSellerSigned = txSignedBy info $ sSeller d
+        hasSellerSigned = txSignedBy info $ siSeller d
 
         minPrice :: Integer
         minPrice =
             let
                 fromAssetAmt = case findOwnInput ctx of
                     Nothing -> traceError "Own input not found"
-                    Just i  -> assetClassValueOf (txOutValue $ txInInfoResolved i) (sFromAsset d)
+                    Just i  -> assetClassValueOf (txOutValue $ txInInfoResolved i) (siFromAsset d)
             in
-                price fromAssetAmt (sRate d)
+                price fromAssetAmt (siRate d)
 
         isSellerPaid :: Bool
         isSellerPaid =
             let
                 pricePaid :: Integer
-                pricePaid =  assetClassValueOf (valuePaidTo info $ sSeller d) (sToAsset d)
+                pricePaid =  assetClassValueOf (valuePaidTo info $ siSeller d) (siToAsset d)
             in
-                traceIfFalseSkeletal pricePaid False ||| traceIfFalseSkeletal (getPubKeyHash $ sSeller d) False ||| (pricePaid P.>= minPrice)
+                if   doesSellerWantLovelace
+                then traceIfFalse "lovelace payment amount insufficient"    (pricePaid P.>= (minPrice P.- rugPullFee))
+                else traceIfFalse "Asset amount insufficient"               (pricePaid P.>= minPrice) &&&
+                     traceIfFalse "Min utxo lovelace amount insufficient"   isMinUtxoLovelaceEnsured
+
+        doesSellerWantLovelace :: Bool
+        doesSellerWantLovelace = siToAsset d P.== AssetClass (Ada.adaSymbol, Ada.adaToken)
+
+        isMinUtxoLovelaceEnsured :: Bool
+        isMinUtxoLovelaceEnsured = minUtxoLovelace  P.<= Ada.getLovelace (Ada.fromValue $ valuePaidTo info (siSeller d))
         
         isFeePaid :: Bool
         isFeePaid =
@@ -77,7 +93,7 @@ mkValidator d _ ctx =
                 pricePaid :: Integer
                 pricePaid = Ada.getLovelace $ Ada.fromValue $ valuePaidTo info adminPKH
             in
-                pricePaid P.>= 2 * 694200
+                pricePaid P.>= 2 P.* rugPullFee
 
         hasOneValidatorInput :: Bool
         hasOneValidatorInput =
@@ -94,16 +110,16 @@ instance Scripts.ValidatorTypes HSSwap where
     type instance DatumType HSSwap = SwapInfo
     type instance RedeemerType HSSwap = BuiltinData
 
-hsSwapInstance :: Scripts.TypedValidator HSSwap
-hsSwapInstance = Scripts.mkTypedValidator @HSSwap
-    $$(PlutusTx.compile [|| mkValidator ||])
+hsSwapInstance :: ContractInfo -> Scripts.TypedValidator HSSwap
+hsSwapInstance ci = Scripts.mkTypedValidator @HSSwap
+    ($$(PlutusTx.compile [|| mkValidator ||]) `PlutusTx.applyCode` PlutusTx.liftCode ci)
     $$(PlutusTx.compile [|| wrap ||])
   where
     wrap = Scripts.wrapValidator @SwapInfo @BuiltinData
 
 
 hsSwapValidator :: Validator
-hsSwapValidator = Scripts.validatorScript hsSwapInstance
+hsSwapValidator = Scripts.validatorScript $ hsSwapInstance contractInfo 
 
 hsSwapScript :: Ledger.Script
 hsSwapScript = unValidatorScript hsSwapValidator
@@ -116,5 +132,6 @@ hsSwapSerialised = PlutusScriptSerialised hsSwapSBS
 
 hsSwapAddress :: Ledger.Address
 hsSwapAddress = scriptAddress hsSwapValidator
+
 
 
