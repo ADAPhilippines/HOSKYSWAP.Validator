@@ -1,4 +1,4 @@
-import { TransactionUnspentOutput, BigNum, Vkeywitnesses, ScriptHash, AssetName, PlutusData, Ed25519KeyHash, BaseAddress, Redeemer, PlutusScripts, TransactionBuilder } from './custom_modules/@emurgo/cardano-serialization-lib-browser';
+import { TransactionUnspentOutput, BigNum, Vkeywitnesses, ScriptHash, AssetName, PlutusData, Ed25519KeyHash, BaseAddress, Redeemer, PlutusScripts, TransactionBuilder, Address } from './custom_modules/@emurgo/cardano-serialization-lib-browser';
 import CardanoLoader from './CardanoLoader';
 import CardanoProtocolParameters from './Types/CardanoProtocolParam';
 import { contractCbor } from "./contract";
@@ -49,7 +49,7 @@ async function BuildOfferTxAsync() {
         );
 
         const contractOutput = Cardano.TransactionOutput.new(
-            Cardano.Address.from_bech32("addr_test1wqqtxf09mr74k8axgxskql5rcyfwgqyth34jvk0ksccucdg8t8v3q"),
+            ContractAddress() as Address,
             Cardano.Value.new(toBigNum("10000000"))
         );
         contractOutput.set_data_hash(datumHash);
@@ -99,12 +99,12 @@ async function BuildSwapTxAsync() {
         const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
         const pkh = toHex(baseAddress.payment_cred().to_keyhash()?.to_bytes() as Uint8Array);
 
-        const scriptInput =  Cardano.TransactionInput.new(
+        const scriptInput = Cardano.TransactionInput.new(
             Cardano.TransactionHash.from_bytes(fromHex("ca49c8f1f95f8c5e0901feb70a07645f15858a6965a2620ae532c8cf7d8786ec")), 0
         );
 
         txBuilder.add_input(
-            Cardano.Address.from_bech32("addr_test1wqqtxf09mr74k8axgxskql5rcyfwgqyth34jvk0ksccucdg8t8v3q"),
+            ContractAddress() as Address,
             scriptInput,
             Cardano.Value.new(toBigNum("10000000"))
         );
@@ -318,6 +318,13 @@ const GetCollateralUnspentTransactionOutputAsync = async () => {
         return utxos as TransactionUnspentOutput[];
     }
 };
+
+const ContractAddress = () => {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+        return Cardano.Address.from_bech32("addr_test1wprv487mrt6am4se9vlrjq6dwqacue8hvptax5ssj65865ca8f97v")
+    }
+}
 
 const GetWalletAddressAsync = async () => (await window.cardano.getUsedAddresses())[0];
 const toHex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
