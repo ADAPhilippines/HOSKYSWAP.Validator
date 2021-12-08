@@ -1,9 +1,8 @@
-import { TransactionUnspentOutput, BigNum, Vkeywitnesses, ScriptHash, AssetName, PlutusData, Ed25519KeyHash, BaseAddress, Redeemer, PlutusScripts, TransactionBuilder, Address } from './custom_modules/@emurgo/cardano-serialization-lib-browser';
+import { TransactionUnspentOutput, BigNum, Vkeywitnesses, ScriptHash, AssetName, PlutusData, Ed25519KeyHash, BaseAddress, Redeemer, PlutusScripts, TransactionBuilder, Address, Value } from '@emurgo/cardano-serialization-lib-browser';
 import CardanoLoader from './CardanoLoader';
 import CardanoProtocolParameters from './Types/CardanoProtocolParam';
 import { contractCbor } from "./contract";
 import { languageViews } from './languageViews';
-import { Value } from './custom_modules/@emurgo/cardano-serialization-lib-nodejs/cardano_serialization_lib';
 
 const BLOCKFROST_PROJECT_ID = "testnetIQtFV2rODiSJP0ROecSNx89tPRQ69mfN";
 const btnSelector = "btnBuy";
@@ -29,7 +28,6 @@ async function BuildOfferTxAsync() {
     if (Cardano !== null) {
         if (!await window.cardano.isEnabled()) await window.cardano.enable();
 
-        const txBuilder = await CreateTransactionBuilderAsync() as TransactionBuilder;
         const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
         const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
         const pkh = toHex(baseAddress.payment_cred().to_keyhash()?.to_bytes() as Uint8Array);
@@ -40,14 +38,14 @@ async function BuildOfferTxAsync() {
         console.log("datumHash", toHex(datumHash.to_bytes()));
         console.log("pkh", pkh);
 
-        txBuilder.add_input(
-            selfAddress,
+        const transactionInputs = Cardano.TransactionInputs.new();
+        transactionInputs.add(
             Cardano.TransactionInput.new(
-                Cardano.TransactionHash.from_bytes(fromHex("890c4702a2bd489433831894bc6b64484a046339c3721b59368630bb1ad22ef0")), 0
-            ),
-            Cardano.Value.new(toBigNum("20000000"))
+                Cardano.TransactionHash.from_bytes(fromHex("7f3c2aea756cd9fcaadc00623bf7b457ac4213353de935103b244f84ba5bed95")), 0
+            )
         );
 
+        const transctionOutputs = Cardano.TransactionOutputs.new();
         const contractOutput = Cardano.TransactionOutput.new(
             ContractAddress() as Address,
             Cardano.Value.new(toBigNum("12394200"))
@@ -55,11 +53,16 @@ async function BuildOfferTxAsync() {
 
         contractOutput.set_data_hash(datumHash);
 
-        txBuilder.add_output(contractOutput);
+        transctionOutputs.add(contractOutput);
+        transctionOutputs.add( Cardano.TransactionOutput.new(
+            selfAddress,
+            Cardano.Value.new(toBigNum("7105800"))
+        ));
 
-        txBuilder.add_change_if_needed(selfAddress);
-
-        const txBody = txBuilder.build();
+        const txBody = Cardano.TransactionBody.new(
+            transactionInputs,
+            transctionOutputs,
+            toBigNum("500000"));
 
         const transaction = Cardano.Transaction.new(
             Cardano.TransactionBody.from_bytes(txBody.to_bytes()),
@@ -94,39 +97,27 @@ async function BuildOfferTxAsync() {
 async function BuildSwapTxAsync() {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-        const txBuilder = await CreateTransactionBuilderAsync() as TransactionBuilder;
         const transactionWitnessSet = Cardano.TransactionWitnessSet.new();
-        
+
         const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
         const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
         const pkh = "3e4a2ec70fcef9e54c437a173714d1f82b96242379816bea3dd387dd";
 
-        const scriptInput =  Cardano.TransactionInput.new(
-            Cardano.TransactionHash.from_bytes(fromHex("cc0e38fa488d9d4ed2f57b151f70a96f74eda7fa3f6cdfd1f8765162f13bdfc1")), 0
+        const scriptInput = Cardano.TransactionInput.new(
+            Cardano.TransactionHash.from_bytes(fromHex("607fd494c917fd45a97659c7ae14a09bf03c150f2ca0581734c9c9c3162422ef")), 0
         );
 
-        txBuilder.add_input(
-            ContractAddress() as Address,
-            scriptInput,
-            Cardano.Value.new(toBigNum("12394200"))
-        );
-
-        txBuilder.add_input(
-            selfAddress,
+        const transactionInputs = Cardano.TransactionInputs.new();
+        transactionInputs.add(scriptInput);
+        transactionInputs.add(
             Cardano.TransactionInput.new(
-                Cardano.TransactionHash.from_bytes(fromHex("b8242caaa5f1316bdf2e10cc9037a281721b94a9e4abb12cac6f3ed31b86c91e")), 0
-            ),
-            AssetValue(
-                toBigNum("5000000"),
-                "88672eaaf6f5c5fb59ffa5b978016207dbbf769014c6870d31adc4de",
-                "484f534b59",
-                toBigNum("10000000")
-            ) as Value
+                Cardano.TransactionHash.from_bytes(fromHex("00a49dc9412ddc9b179821b7ec7adc9bc35b07939e74d620f295ca8181f69272")), 0
+            )
         );
 
-        const scriptInputIndex = txBuilder.index_of_input(scriptInput);
+        const transactionOutputs = Cardano.TransactionOutputs.new();
 
-        txBuilder.add_output(Cardano.TransactionOutput.new(
+        transactionOutputs.add(Cardano.TransactionOutput.new(
             Cardano.Address.from_bech32("addr_test1qqly5tk8pl80ne2vgdapwdc568uzh93yyducz6l28hfc0htkdqgkydtswrycyf9hruerftc8mwel9ck6pksvyszs968qhauh2s"),
             AssetValue(
                 toBigNum("1500000"),
@@ -136,25 +127,26 @@ async function BuildSwapTxAsync() {
             ) as Value
         ));
 
-        txBuilder.add_output(Cardano.TransactionOutput.new(
+
+        transactionOutputs.add(Cardano.TransactionOutput.new(
             Cardano.Address.from_bech32("addr_test1qp99g3msu76sg2g2xl996lqnvxkanygpkvf49g6evg693ehq5gyu2ypuw7k3lfmrpmsdk9qwnw9pw0vp7gg6rr5qkd9qqw0ela"),
             Cardano.Value.new(toBigNum("1388400"))
         ));
 
+        transactionOutputs.add(Cardano.TransactionOutput.new(
+            Cardano.Address.from_bech32("addr_test1qrnrqg4s73skqfyyj69mzr7clpe8s7ux9t8z6l55x2f2xuqra34p9pswlrq86nq63hna7p4vkrcrxznqslkta9eqs2nsmlqvnk"),
+            Cardano.Value.new(toBigNum("10405800"))
+        ));
+
         const requiredSigners = Cardano.Ed25519KeyHashes.new();
         requiredSigners.add(baseAddress.payment_cred().to_keyhash() as Ed25519KeyHash);
-        txBuilder.set_required_signers(requiredSigners);
 
         const datum = HoskySwapDatum(pkh) as PlutusData;
         const datumList = Cardano.PlutusList.new();
         datumList.add(datum);
 
         const redeemers = Cardano.Redeemers.new();
-        redeemers.add(SimpleRedeemer(scriptInputIndex) as Redeemer);
-
-        txBuilder.set_plutus_scripts(ContractScript() as PlutusScripts);
-        txBuilder.set_plutus_data(Cardano.PlutusList.from_bytes(datumList.to_bytes()));
-        txBuilder.set_redeemers(Cardano.Redeemers.from_bytes(redeemers.to_bytes()));
+        redeemers.add(SimpleRedeemer(1) as Redeemer);
 
         transactionWitnessSet.set_plutus_scripts(ContractScript() as PlutusScripts);
         transactionWitnessSet.set_plutus_data(Cardano.PlutusList.from_bytes(datumList.to_bytes()));
@@ -163,10 +155,31 @@ async function BuildSwapTxAsync() {
         const collateralUnspentTransactions = (await GetCollateralUnspentTransactionOutputAsync()) as TransactionUnspentOutput[];
         const collateralInputs = Cardano.TransactionInputs.new();
         collateralUnspentTransactions.forEach(c => collateralInputs.add(c.input()));
-        txBuilder.set_collateral(collateralInputs);
-        txBuilder.add_change_if_needed(selfAddress);
 
-        const txBody = txBuilder.build();
+        const txBody = Cardano.TransactionBody.new(
+            transactionInputs,
+            transactionOutputs,
+            toBigNum("600000")
+        );
+
+        const cost_model_vals = [150000, 150000, 150000, 150000, 150000, 150000, 150000, 150000, 150000, 32, 29773, 29773, 150000, 32, 150000, 150000, 150000, 32, 32, 150000, 150000, 4, 29773, 29773, 29773, 29773, 150000, 150000, 150000, 150000, 32, 1, 32, 150000, 32, 32, 32, 150000, 100, 100, 32, 32, 32, 4, 4, 32, 29773, 100, 32, 150000, 32, 29175, 100, 100, 100, 100, 32, 32, 32, 32, 1, 1, 150000, 32, 32, 29175, 82363, 100, 100, 1, 150000, 32, 0, 1000, 1000, 10000, 1, 32, 2477736, 1000, 1000, 1, 150000, 1, 2477736, 0, 1, 1, 8, 8, 1, 1326, 148000, 1, 197209, 1000, 150000, 150000, 150000, 1, 1000, 4, 1, 497, 1, 11218, 5000, 0, 1, 621, 150000, 148000, 1, 247, 150000, 1, 1, 0, 0, 136542, 0, 150000, 1, 248, 1, 1, 148000, 1, 1, 1, 1, 0, 150000, 179690, 61516, 148000, 1, 150000, 197209, 3345831, 396231, 0, 112536, 1, 0, 1, 1366, 1, 103599, 0, 0, 0, 1, 0, 0, 248, 145276, 118, 103599, 118, 425507, 118, 118, 425507, 425507, 425507];
+
+        const costModel = Cardano.CostModel.new();
+        cost_model_vals.forEach((x, i) => {
+            if (Cardano !== null) {
+                costModel.set(i, Cardano.Int.new_i32(x));
+            }
+        });
+
+        const costModels = Cardano.Costmdls.new();
+        costModels.insert(Cardano.Language.new_plutus_v1(), costModel);
+
+        // set script data hash
+        txBody.set_script_data_hash(
+            Cardano.hash_script_data(redeemers, costModels, datumList)
+        );
+
+        txBody.set_collateral(collateralInputs);
 
         const transaction = Cardano.Transaction.new(
             Cardano.TransactionBody.from_bytes(txBody.to_bytes()),
@@ -240,41 +253,41 @@ const HoskySwapDatum = (pkh: string) => {
 
         return Cardano.PlutusData.new_constr_plutus_data(
             Cardano.ConstrPlutusData.new(
-                Cardano.Int.new_i32(0),
+                toBigNum("0"),
                 datumFields
             )
         );
     }
 }
 
-const CreateTransactionBuilderAsync = async () => {
-    let Cardano = CardanoSerializationLib();
-    if (Cardano !== null) {
-        let protocolParams = await GetProtocolProtocolParamsAsync();
-        const txBuilder = Cardano.TransactionBuilder.new(
-            Cardano.LinearFee.new(
-                toBigNum(protocolParams.min_fee_a),
-                toBigNum(protocolParams.min_fee_b)
-            ),
-            toBigNum("1000000"),
-            toBigNum("500000000"),
-            toBigNum("2000000"),
-            parseInt("5000"),
-            16384,
-            5.77e-2,
-            7.21e-5,
-            Cardano.LanguageViews.new(fromHex(languageViews))
-        );
-        return txBuilder;
-    }
-}
+// const CreateTransactionBuilderAsync = async () => {
+//     let Cardano = CardanoSerializationLib();
+//     if (Cardano !== null) {
+//         let protocolParams = await GetProtocolProtocolParamsAsync();
+//         const txBuilder = Cardano.TransactionBuilder.new(
+//             Cardano.LinearFee.new(
+//                 toBigNum(protocolParams.min_fee_a),
+//                 toBigNum(protocolParams.min_fee_b)
+//             ),
+//             toBigNum("1000000"),
+//             toBigNum("500000000"),
+//             toBigNum("2000000"),
+//             parseInt("5000"),
+//             16384,
+//             5.77e-2,
+//             7.21e-5,
+//             Cardano.LanguageViews.new(fromHex(languageViews))
+//         );
+//         return txBuilder;
+//     }
+// }
 
 const SimpleRedeemer = (index: number) => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
         const redeemerData = Cardano.PlutusData.new_constr_plutus_data(
             Cardano.ConstrPlutusData.new(
-                Cardano.Int.new_i32(0),
+                toBigNum("0"),
                 Cardano.PlutusList.new()
             )
         );
@@ -300,7 +313,7 @@ const AssetClassDatum = (policyId: string, assetName: string) => {
 
         return Cardano.PlutusData.new_constr_plutus_data(
             Cardano.ConstrPlutusData.new(
-                Cardano.Int.new_i32(0),
+                toBigNum("0"),
                 datumFields
             )
         );
