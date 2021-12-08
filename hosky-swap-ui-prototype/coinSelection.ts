@@ -1,15 +1,9 @@
-import {
-  TransactionUnspentOutput,
-  TransactionOutputs,
-  Value,
-  MultiAsset,
-  Assets,
-  BigNum,
-} from "./custom_modules/@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib";
-
-const BigInt = window.BigInt;
 
 /**
+ * 
+ * Ported to TypeScript by Clark Alesna <clark@saib.dev>
+ * Founder of SAIB Inc, Founder ADAPH Cardano Stake Pool
+ * 
  * BerryPool implementation of the __Random-Improve__ coin selection algorithm.
  *
  * = Overview
@@ -155,6 +149,17 @@ const BigInt = window.BigInt;
  * entries that it is less likely for a randomly-chosen UTxO entry to push the
  * total above the upper bound.
  */
+
+import {
+  TransactionUnspentOutput,
+  TransactionOutputs,
+  Value,
+  MultiAsset,
+  Assets,
+  BigNum,
+} from "./custom_modules/@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib";
+
+const BigInt = window.BigInt;
 
 let protocolParameters = { minUTxO: "", minFeeA: "", minFeeB: "", maxTxSize: "" };
 
