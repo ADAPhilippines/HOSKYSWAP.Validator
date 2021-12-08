@@ -292,7 +292,7 @@ const CoinSelection = {
     }
 
     return {
-      input: utxoSelection.selection,
+      inputs: utxoSelection.selection,
       output: outputs,
       remaining: utxoSelection.remaining,
       amount: utxoSelection.amount,
