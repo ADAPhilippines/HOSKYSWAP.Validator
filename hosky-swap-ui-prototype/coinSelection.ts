@@ -2,7 +2,7 @@
 /**
  * 
  * Ported to TypeScript by Clark Alesna <clark@saib.dev>
- * Founder of SAIB Inc, Founder ADAPH Cardano Stake Pool
+ * Founder of SAIB Inc, Founder of ADAPH Cardano Stake Pool
  * 
  * BerryPool implementation of the __Random-Improve__ coin selection algorithm.
  *
