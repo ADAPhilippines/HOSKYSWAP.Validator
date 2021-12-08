@@ -178,13 +178,6 @@ type ImproveRange = {
  * CoinSelection Module.
  */
 const CoinSelection = {
-  /**
-   * Set protocol parameters required by the algorithm
-   * @param {string} minUTxO
-   * @param {string} minFeeA
-   * @param {string} minFeeB
-   * @param {string} maxTxSize
-   */
   setProtocolParameters: (minUTxO: string, minFeeA: string, minFeeB: string, maxTxSize: string) => {
     protocolParameters = {
       minUTxO: minUTxO,
