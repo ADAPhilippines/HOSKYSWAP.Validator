@@ -1,4 +1,4 @@
-import { TransactionUnspentOutput, BigNum, Vkeywitnesses, ScriptHash, AssetName, PlutusData, Ed25519KeyHash, BaseAddress, Redeemer, PlutusScripts, TransactionBuilder, Address, Value } from '@emurgo/cardano-serialization-lib-browser';
+import { TransactionUnspentOutput, BigNum, Vkeywitnesses, ScriptHash, AssetName, PlutusData, Ed25519KeyHash, BaseAddress, Redeemer, PlutusScripts, TransactionBuilder, Address, Value, Int } from '@emurgo/cardano-serialization-lib-browser';
 import CardanoLoader from './CardanoLoader';
 import CardanoProtocolParameters from './Types/CardanoProtocolParam';
 import { contractCbor } from "./contract";
@@ -103,6 +103,10 @@ async function BuildSwapTxAsync() {
         const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
         const pkh = "3e4a2ec70fcef9e54c437a173714d1f82b96242379816bea3dd387dd";
 
+        const datumHash = Cardano.hash_plutus_data(HoskySwapDatum(pkh) as PlutusData);
+
+        console.log("datumHash", toHex(datumHash.to_bytes()));
+        
         const scriptInput = Cardano.TransactionInput.new(
             Cardano.TransactionHash.from_bytes(fromHex("607fd494c917fd45a97659c7ae14a09bf03c150f2ca0581734c9c9c3162422ef")), 0
         );
@@ -111,7 +115,7 @@ async function BuildSwapTxAsync() {
         transactionInputs.add(scriptInput);
         transactionInputs.add(
             Cardano.TransactionInput.new(
-                Cardano.TransactionHash.from_bytes(fromHex("00a49dc9412ddc9b179821b7ec7adc9bc35b07939e74d620f295ca8181f69272")), 0
+                Cardano.TransactionHash.from_bytes(fromHex("4a871d670597e5b8d232cdc270a16bd291689cef7d40cedeeb94d495def443eb")), 0
             )
         );
 
@@ -126,7 +130,6 @@ async function BuildSwapTxAsync() {
                 toBigNum("10000000")
             ) as Value
         ));
-
 
         transactionOutputs.add(Cardano.TransactionOutput.new(
             Cardano.Address.from_bech32("addr_test1qp99g3msu76sg2g2xl996lqnvxkanygpkvf49g6evg693ehq5gyu2ypuw7k3lfmrpmsdk9qwnw9pw0vp7gg6rr5qkd9qqw0ela"),
@@ -162,14 +165,10 @@ async function BuildSwapTxAsync() {
             toBigNum("600000")
         );
 
-        const cost_model_vals = [150000, 150000, 150000, 150000, 150000, 150000, 150000, 150000, 150000, 32, 29773, 29773, 150000, 32, 150000, 150000, 150000, 32, 32, 150000, 150000, 4, 29773, 29773, 29773, 29773, 150000, 150000, 150000, 150000, 32, 1, 32, 150000, 32, 32, 32, 150000, 100, 100, 32, 32, 32, 4, 4, 32, 29773, 100, 32, 150000, 32, 29175, 100, 100, 100, 100, 32, 32, 32, 32, 1, 1, 150000, 32, 32, 29175, 82363, 100, 100, 1, 150000, 32, 0, 1000, 1000, 10000, 1, 32, 2477736, 1000, 1000, 1, 150000, 1, 2477736, 0, 1, 1, 8, 8, 1, 1326, 148000, 1, 197209, 1000, 150000, 150000, 150000, 1, 1000, 4, 1, 497, 1, 11218, 5000, 0, 1, 621, 150000, 148000, 1, 247, 150000, 1, 1, 0, 0, 136542, 0, 150000, 1, 248, 1, 1, 148000, 1, 1, 1, 1, 0, 150000, 179690, 61516, 148000, 1, 150000, 197209, 3345831, 396231, 0, 112536, 1, 0, 1, 1366, 1, 103599, 0, 0, 0, 1, 0, 0, 248, 145276, 118, 103599, 118, 425507, 118, 118, 425507, 425507, 425507];
+        const cost_model_vals = [197209, 0, 1, 1, 396231, 621, 0, 1, 150000, 1000, 0, 1, 150000, 32, 2477736, 29175, 4, 29773, 100, 29773, 100, 29773, 100, 29773, 100, 29773, 100, 29773, 100, 100, 100, 29773, 100, 150000, 32, 150000, 32, 150000, 32, 150000, 1000, 0, 1, 150000, 32, 150000, 1000, 0, 8, 148000, 425507, 118, 0, 1, 1, 150000, 1000, 0, 8, 150000, 112536, 247, 1, 150000, 10000, 1, 136542, 1326, 1, 1000, 150000, 1000, 1, 150000, 32, 150000, 32, 150000, 32, 1, 1, 150000, 1, 150000, 4, 103599, 248, 1, 103599, 248, 1, 145276, 1366, 1, 179690, 497, 1, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 148000, 425507, 118, 0, 1, 1, 61516, 11218, 0, 1, 150000, 32, 148000, 425507, 118, 0, 1, 1, 148000, 425507, 118, 0, 1, 1, 2477736, 29175, 4, 0, 82363, 4, 150000, 5000, 0, 1, 150000, 32, 197209, 0, 1, 1, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 3345831, 1, 1];
 
         const costModel = Cardano.CostModel.new();
-        cost_model_vals.forEach((x, i) => {
-            if (Cardano !== null) {
-                costModel.set(i, Cardano.Int.new_i32(x));
-            }
-        });
+        cost_model_vals.forEach((x, i) => costModel.set(i, Cardano?.Int.new_i32(x) as Int));
 
         const costModels = Cardano.Costmdls.new();
         costModels.insert(Cardano.Language.new_plutus_v1(), costModel);
