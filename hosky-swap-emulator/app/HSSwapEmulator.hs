@@ -97,15 +97,13 @@ runEmulator = do
             { hsSwap = swap1
             , amount = 10_000_000
             }
+        -- void $ Emulator.waitNSlots 1
+        -- callEndpoint @"offer" h1 OfferSwapParams
+        --     { hsSwap = swap2
+        --     , amount = 10_000_000
+        --     }
         void $ Emulator.waitNSlots 1
-        callEndpoint @"offer" h1 OfferSwapParams
-            { hsSwap = swap2
-            , amount = 10_000_000
-            }
-        void $ Emulator.waitNSlots 1
-        callEndpoint @"execute" h2 swap1
-        void $ Emulator.waitNSlots 1
-        callEndpoint @"execute" h2 swap2
+        callEndpoint @"cancel" h1 swap1
         void $ Emulator.waitNSlots 1
 
 getPKH :: Integer -> PubKeyHash

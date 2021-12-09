@@ -40,8 +40,9 @@ import qualified    Plutus.V1.Ledger.Ada as Ada
 {-# INLINABLE mkValidator #-}
 mkValidator :: ContractInfo -> SwapInfo -> BuiltinData -> ScriptContext -> P.Bool
 mkValidator ContractInfo{..} d _ ctx =
+    traceIfFalse    "Only 1 script input allowed"           hasOneScriptInput           &&&
     traceIfFalse    "Fees not paid"                         isFeePaid                   &&&
-    (hasSellerSigned                                                                    |||
+    (                                                       hasSellerSigned             |||
     (traceIfFalse   "Min Utxo Lovelace not returned"        isMinUtxoLovelaceReturned   &&&
      traceIfFalse   "Seller not paid"                       isSellerPaid ))
 
@@ -89,15 +90,15 @@ mkValidator ContractInfo{..} d _ ctx =
                 pricePaid :: Integer
                 pricePaid = Ada.getLovelace $ Ada.fromValue $ valuePaidTo info ciAdminPKH
             in
-                pricePaid P.>= 2 P.* ciRugPullFee P.* scriptInputCount
+                pricePaid P.>= 2 P.* ciRugPullFee
         
-        scriptInputCount :: Integer
-        scriptInputCount = 
+        hasOneScriptInput :: Bool
+        hasOneScriptInput = 
             let
                 ownInputs :: [TxInInfo]
                 ownInputs = P.filter ((== Just (ownHash ctx)) . toValidatorHash . txOutAddress . txInInfoResolved) $ txInfoInputs info
             in
-                P.length ownInputs
+                P.length ownInputs == 1
                 
 {-
     As a ScriptInstance

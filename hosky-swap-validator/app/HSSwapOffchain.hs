@@ -115,7 +115,7 @@ cancelSwap si = do
                         feeValue            =   lovelaceValueOf $ 2 * rugPullFee
                         lookups     =   Constraints.otherScript hsSwapValidator <>
                                         Constraints.unspentOutputs (Map.fromList [(oref, o)])
-                        tx          =   Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ())           <>
+                        tx          =   Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ())           <>        
                                         Constraints.mustPayToPubKey adminPKH feeValue
                     ledgerTx <- submitTxConstraintsWith @HSSwap lookups tx
                     awaitTxConfirmed $ txId ledgerTx
