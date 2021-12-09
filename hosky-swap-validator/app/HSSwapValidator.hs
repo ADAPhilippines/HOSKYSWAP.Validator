@@ -36,16 +36,14 @@ import              PlutusTx.Prelude hiding (Semigroup (..), unless)
 import              Cardano.Api             ( PlutusScriptV1 )
 import              HSSwapCommon
 import qualified    Plutus.V1.Ledger.Ada as Ada
-import              PlutusTx.Skeleton
 
 {-# INLINABLE mkValidator #-}
 mkValidator :: ContractInfo -> SwapInfo -> BuiltinData -> ScriptContext -> P.Bool
 mkValidator ContractInfo{..} d _ ctx =
-    hasSellerSigned |||
-    ( traceIfFalse  "Cannot have more than 1 validator" hasOneValidatorInput        &&&
-      traceIfFalse  "Fees not paid"                     isFeePaid                   &&&
-      traceIfFalse  "Min Utxo Lovelace not returned"    isMinUtxoLovelaceReturned   &&&
-      traceIfFalse  "Seller not paid"                   isSellerPaid )
+    traceIfFalse    "Fees not paid"                         isFeePaid                   &&&
+    (hasSellerSigned                                                                    |||
+    (traceIfFalse   "Min Utxo Lovelace not returned"        isMinUtxoLovelaceReturned   &&&
+     traceIfFalse   "Seller not paid"                       isSellerPaid ))
 
     where
         info :: TxInfo
@@ -91,15 +89,15 @@ mkValidator ContractInfo{..} d _ ctx =
                 pricePaid :: Integer
                 pricePaid = Ada.getLovelace $ Ada.fromValue $ valuePaidTo info ciAdminPKH
             in
-                pricePaid P.>= 2 P.* ciRugPullFee
-
-        hasOneValidatorInput :: Bool
-        hasOneValidatorInput =
+                pricePaid P.>= 2 P.* ciRugPullFee P.* scriptInputCount
+        
+        scriptInputCount :: Integer
+        scriptInputCount = 
             let
-                validatorInputs :: [TxInInfo]
-                validatorInputs = P.filter (P.isJust . toValidatorHash . txOutAddress . txInInfoResolved) $ txInfoInputs info
+                ownInputs :: [TxInInfo]
+                ownInputs = P.filter ((== Just (ownHash ctx)) . toValidatorHash . txOutAddress . txInInfoResolved) $ txInfoInputs info
             in
-                P.length validatorInputs P.== 1
+                P.length ownInputs
                 
 {-
     As a ScriptInstance

@@ -1,10 +1,10 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE DeriveAnyClass         #-}
+{-# LANGUAGE DeriveGeneric          #-}
+{-# LANGUAGE TypeApplications       #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE OverloadedStrings      #-}
 
 module HSSwapOffchain
     ( endpoints
@@ -110,9 +110,13 @@ cancelSwap si = do
             case head xs of
                 Nothing           -> logInfo @String "swap not found"
                 Just (oref, o, _) -> do
-                    let lookups     =   Constraints.otherScript hsSwapValidator <>
+                    let adminPKH            =   ciAdminPKH contractInfo
+                        rugPullFee          =   ciRugPullFee contractInfo
+                        feeValue            =   lovelaceValueOf $ 2 * rugPullFee
+                        lookups     =   Constraints.otherScript hsSwapValidator <>
                                         Constraints.unspentOutputs (Map.fromList [(oref, o)])
-                        tx          =   Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ())
+                        tx          =   Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ())           <>
+                                        Constraints.mustPayToPubKey adminPKH feeValue
                     ledgerTx <- submitTxConstraintsWith @HSSwap lookups tx
                     awaitTxConfirmed $ txId ledgerTx
                     logInfo @String $ "canceled swap"
@@ -123,9 +127,13 @@ cancelAllSwaps = do
     case Map.toList utxos of
         []  -> logInfo @String "no utxos at the script address"
         _   -> do
-            let lookups =   Constraints.unspentOutputs utxos <>
+            let adminPKH            =   ciAdminPKH contractInfo
+                rugPullFee          =   ciRugPullFee contractInfo
+                feeValue            =   lovelaceValueOf $ 2 * rugPullFee * length (Map.toList utxos)
+                lookups =   Constraints.unspentOutputs utxos <>
                             Constraints.otherScript hsSwapValidator
-                tx      =   mconcat [Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ()) | (oref, _) <- Map.toList utxos]
+                tx      =   mconcat [Constraints.mustSpendScriptOutput oref (Redeemer $ PlutusTx.toBuiltinData ()) | (oref, _) <- Map.toList utxos] <>
+                            Constraints.mustPayToPubKey adminPKH feeValue
             ledgerTx <- submitTxConstraintsWith @HSSwap lookups tx
             awaitTxConfirmed $ txId ledgerTx
             logInfo @String $ "canceled swap"
