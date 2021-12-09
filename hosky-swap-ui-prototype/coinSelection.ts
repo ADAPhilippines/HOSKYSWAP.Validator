@@ -697,6 +697,6 @@ function compare(group: Value, candidate: Value) {
 let Cardano: typeof import("./custom_modules/@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib");
 const setCardanoSerializationLib = (_cardano: typeof import("./custom_modules/@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib")) => {
   Cardano = _cardano;
-}
+};
 
 export { CoinSelection, setCardanoSerializationLib };
