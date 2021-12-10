@@ -103,7 +103,7 @@ runEmulator = do
         --     , amount = 10_000_000
         --     }
         void $ Emulator.waitNSlots 1
-        callEndpoint @"cancel" h1 swap1
+        callEndpoint @"execute" h2 swap1
         void $ Emulator.waitNSlots 1
 
 getPKH :: Integer -> PubKeyHash

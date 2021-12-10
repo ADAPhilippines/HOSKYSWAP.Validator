@@ -60,7 +60,7 @@ contractInfo :: ContractInfo
 contractInfo = ContractInfo
     { ciAdminPKH        = "4a544770e7b504290a37ca5d7c1361add99101b31352a359623458e6"
     , ciRugPullFee      = 694_200
-    , ciMinUtxoLovelace = 1_500_000
+    , ciMinUtxoLovelace = 2_000_000
     , ciSellerFeeShare  = 300_000
     }
 
