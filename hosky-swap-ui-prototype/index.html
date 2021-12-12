@@ -1,9 +1,28 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <script type="text/javascript" src="app.js"></script>
-    </head>
-    <body>
-        <button id="btnBuy">CONTRACT</button>
-    </body>
+
+<head>
+    <script type="text/javascript" src="app.js"></script>
+</head>
+
+<body>
+    <form>
+        <input id="txtFrom" type="number" placeholder="Amount" />
+        <select id="selFrom">
+            <option value="ada">ADA</option>
+            <option value="hosky">HOSKY</option>
+        </select>
+        <br />
+        <input id="txtPrice" type="number" placeholder="Price" readonly/>
+        <br />
+        <input id="txtTo" type="number" placeholder="Amount" />
+        <select>
+            <option value="ada">ADA</option>
+            <option value="hosky" selected>HOSKY</option>
+        </select>
+        <br />
+        <button type="button" id="btnSwap">SWAP</button>
+    </form>
+</body>
+
 </html>

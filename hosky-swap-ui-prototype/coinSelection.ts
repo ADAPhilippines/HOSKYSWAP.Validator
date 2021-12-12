@@ -1,4 +1,3 @@
-
 /**
  * 
  * Ported to TypeScript by Clark Alesna <clark@saib.dev>
