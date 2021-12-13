@@ -15,26 +15,38 @@ let txtFrom: HTMLInputElement;
 let txtTo: HTMLInputElement;
 let txtPrice: HTMLInputElement;
 let signalRConnection: HubConnection;
+let Orders: any[] = [];
 
 async function Main() {
     signalRConnection = new HubConnectionBuilder()
         .withUrl("http://localhost:1338/swap")
         .build();
     await signalRConnection.start();
-    
+
     await signalRConnection.send("BuyOrderUpdate");
 
     signalRConnection.on("BuyOrderUpdate", (orders: any[]) => {
         console.log("buyOrders", orders);
+        Orders = orders;
+
         const buyTable = (document.getElementById("buyTable") as HTMLTableElement);
         buyTable.querySelectorAll(".buyOrder").forEach(o => o.remove());
         orders.forEach(o => {
-            var tr = document.createElement("tr");
+            const tr = document.createElement("tr");
             tr.className = "buyOrder";
-            var tdPrice = document.createElement("td");
-            var tdTotal = document.createElement("td");
+            const tdPrice = document.createElement("td");
+            const tdTotal = document.createElement("td");
+            const tdAction = document.createElement("td");
+            const btnSell = document.createElement("button");
+
+            btnSell.innerText = "Sell";
+            btnSell.onclick = () => ExecuteSell(o);
+
+            tdAction.appendChild(btnSell);
+
             tr.appendChild(tdPrice);
             tr.appendChild(tdTotal);
+            tr.appendChild(tdAction);
 
             tdPrice.innerText = o.Fields[0].Value;
             tdTotal.innerText = o.Amounts[0].Quantity;
@@ -53,6 +65,10 @@ async function Main() {
     txtTo.addEventListener("keyup", OnFromChange);
 }
 
+async function ExecuteSell(order: any) {
+    await BuildSwapTxAsync(order);
+}
+
 async function ExecuteSwap() {
     CalculatePrice();
     await BuildOfferTxAsync();
@@ -64,9 +80,9 @@ function OnFromChange() {
 
 function CalculatePrice() {
     try {
-        const fromValue = BigInt(txtFrom.value ?? "0");
-        const toValue = BigInt(txtTo.value ?? "0");
-        txtPrice.value = (Number((fromValue * BigInt(1000000)) / toValue) / 1000000).toString();
+        const fromValue = parseInt(txtFrom.value);
+        const toValue = parseInt(txtTo.value);
+        txtPrice.value = (toValue / fromValue).toString();
     }
     catch (e) {
         console.log(e);
@@ -101,12 +117,13 @@ async function BuildOfferTxAsync() {
         const pkh = toHex(baseAddress.payment_cred().to_keyhash()?.to_bytes() as Uint8Array);
 
         const transactionWitnessSet = Cardano.TransactionWitnessSet.new();
-        const hoskyDatumObject = HoskySwapDatum(pkh) as PlutusDataObject;
+        const hoskyDatumObject = HoskySwapDatum(pkh, parseFloat(txtPrice.value) * 1000000) as PlutusDataObject;
         const datumHash = Cardano.hash_plutus_data(ToPlutusData(hoskyDatumObject) as PlutusData);
 
         console.log("datumHash", toHex(datumHash.to_bytes()));
         console.log("pkh", pkh);
         console.log("value", GetContractOutput()?.coin().to_str());
+        console.log("datumObj", hoskyDatumObject);
 
         const contractOutput = Cardano.TransactionOutput.new(
             ContractAddress() as Address,
@@ -162,12 +179,11 @@ async function BuildOfferTxAsync() {
         );
 
         console.log("full tx size", signedTx.to_bytes().length);
-        console.log("datumObj", hoskyDatumObject);
         await signalRConnection.send("SubmitOrderTx", toHex(signedTx.to_bytes()), JSON.stringify(hoskyDatumObject));
     }
 }
 
-async function BuildSwapTxAsync() {
+async function BuildSwapTxAsync(order: any) {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
 
@@ -185,27 +201,32 @@ async function BuildSwapTxAsync() {
 
         const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
         const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
-        const pkh = "3e4a2ec70fcef9e54c437a173714d1f82b96242379816bea3dd387dd";
+
+        const pkh = GetPkhFromOrder(order);
+        console.log("pkh", pkh);
+
+        const utxoLovelaceAmount = parseInt(order.Amounts[0].Quantity);
+        const rate = GetRateFromOrder(order);
 
         const scriptUtxo = Cardano.TransactionUnspentOutput.new(
             Cardano.TransactionInput.new(
-                Cardano.TransactionHash.from_bytes(fromHex("b2bb38245e49c21e80c2b78f1c5f0ac8966214919930ffecb4dfc46a674be27e")), 0
+                Cardano.TransactionHash.from_bytes(fromHex(order.TxId)), order.TxIdx
             ),
             Cardano.TransactionOutput.new(
-                Cardano.Address.from_bech32("addr_test1wp8qttdrd4qqvnpnuhmzlqlecnmt7wn3u4erlkncu3y9fhgx4yltu"),
-                Cardano.Value.new(toBigNum("12394200"))
+                ContractAddress() as Address,
+                Cardano.Value.new(toBigNum(utxoLovelaceAmount))
             )
         );
 
         const utxos = await window.cardano.getUtxos();
         const outputs: TransactionOutput[] = [
             Cardano.TransactionOutput.new(
-                Cardano.Address.from_bech32("addr_test1qqly5tk8pl80ne2vgdapwdc568uzh93yyducz6l28hfc0htkdqgkydtswrycyf9hruerftc8mwel9ck6pksvyszs968qhauh2s"),
+                Cardano.Address.from_bech32(order.OwnerAddress),
                 AssetValue(
-                    toBigNum("1500000"),
+                    toBigNum(2000000),
                     "88672eaaf6f5c5fb59ffa5b978016207dbbf769014c6870d31adc4de",
                     "484f534b59",
-                    toBigNum("10000000")
+                    toBigNum(((utxoLovelaceAmount - 2000000 - 1388400) / 1000000) * (rate / 1000000))
                 ) as Value
             ),
             Cardano.TransactionOutput.new(
@@ -241,8 +262,11 @@ async function BuildSwapTxAsync() {
         requiredSigners.add(baseAddress.payment_cred().to_keyhash() as Ed25519KeyHash);
         txBuilder.set_required_signers(requiredSigners);
 
-        const datumObj = HoskySwapDatum(pkh);
+        const datumObj = HoskySwapDatum(pkh, rate);
         const datum = ToPlutusData(datumObj as PlutusDataObject) as PlutusData;
+
+        console.log(toHex(Cardano.hash_plutus_data(datum).to_bytes()));
+
         const datumList = Cardano.PlutusList.new();
         datumList.add(datum);
 
@@ -289,7 +313,7 @@ async function BuildSwapTxAsync() {
             )
         );
 
-        console.log("Full Tx Size", signedTx.to_bytes().length);
+        console.log("full tx size", signedTx.to_bytes().length);
         let result = await window.cardano.submitTx(toHex(signedTx.to_bytes()));
         console.log("tx submitted", result);
     }
@@ -307,11 +331,11 @@ async function GetProtocolProtocolParamsAsync(): Promise<CardanoProtocolParamete
 const GetContractOutput = () => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-        let fromAmount = BigInt(txtFrom.value);
+        let fromAmount = parseInt(txtFrom.value);
         if (GetFromUnit() === "ada") {
-            fromAmount *= BigInt(1000000);
-            fromAmount += BigInt(2000000);
-            fromAmount += BigInt(694200 * 2);
+            fromAmount *= 1000000;
+            fromAmount += 2000000;
+            fromAmount += 694200 * 2;
             return Cardano.Value.new(toBigNum(fromAmount));
         }
         else {
@@ -378,7 +402,7 @@ const ToPlutusData = (plutusDataObj: PlutusDataObject) => {
     }
 }
 
-const HoskySwapDatum = (pkh: string) => {
+const HoskySwapDatum = (pkh: string, rate: number) => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
 
@@ -388,7 +412,7 @@ const HoskySwapDatum = (pkh: string) => {
                 Index: 0,
                 Type: PlutusFieldType.Integer,
                 Key: "siRate",
-                Value: 1000000
+                Value: rate
             } as PlutusField,
             {
                 Index: 0,
@@ -510,6 +534,8 @@ const ContractAddress = () => {
 const GetWalletAddressAsync = async () => (await window.cardano.getUsedAddresses())[0];
 const toHex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
 const fromHex = (hex: string) => Buffer.from(hex, "hex");
+const GetPkhFromOrder = (order: any) => order.Fields.filter((f: any) => f.Key === "siSeller")[0].Value.toString();
+const GetRateFromOrder = (order: any) => order.Fields.filter((f: any) => f.Key === "siRate")[0].Value as number;
 
 const toBigNum = (value: any) => {
     let Cardano = CardanoSerializationLib();
