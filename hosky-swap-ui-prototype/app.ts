@@ -21,6 +21,24 @@ async function Main() {
         .withUrl("http://localhost:1338/swap")
         .build();
     await signalRConnection.start();
+    
+    await signalRConnection.send("BuyOrderUpdate");
+
+    signalRConnection.on("BuyOrderUpdate", (orders: any[]) => {
+        console.log("buyOrders", orders);
+        orders.forEach(o => {
+            var tr = document.createElement("tr");
+            tr.childNodes.forEach(c => tr.removeChild(c));
+            var tdPrice = document.createElement("td");
+            var tdTotal = document.createElement("td");
+            tr.appendChild(tdPrice);
+            tr.appendChild(tdTotal);
+
+            tdPrice.innerText = o.Fields[0].Value;
+            tdTotal.innerText = o.Amounts[0].Quantity;
+            (document.getElementById("buyTable") as HTMLTableElement).appendChild(tr);
+        });
+    });
 
     await CardanoLoader.LoadAsync();
     btnSwap = document.getElementById("btnSwap") as HTMLButtonElement;
