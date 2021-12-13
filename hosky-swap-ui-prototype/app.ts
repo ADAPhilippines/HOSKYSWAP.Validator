@@ -26,9 +26,11 @@ async function Main() {
 
     signalRConnection.on("BuyOrderUpdate", (orders: any[]) => {
         console.log("buyOrders", orders);
+        const buyTable = (document.getElementById("buyTable") as HTMLTableElement);
+        buyTable.querySelectorAll(".buyOrder").forEach(o => o.remove());
         orders.forEach(o => {
             var tr = document.createElement("tr");
-            tr.childNodes.forEach(c => tr.removeChild(c));
+            tr.className = "buyOrder";
             var tdPrice = document.createElement("td");
             var tdTotal = document.createElement("td");
             tr.appendChild(tdPrice);
