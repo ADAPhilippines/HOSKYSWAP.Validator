@@ -1,25 +1,98 @@
-import { TransactionUnspentOutput, BigNum, Vkeywitnesses, ScriptHash, AssetName, PlutusData, Ed25519KeyHash, BaseAddress, Redeemer, PlutusScripts, TransactionBuilder, Address, TransactionOutputs, TransactionOutput } from './custom_modules/@emurgo/cardano-serialization-lib-browser';
+import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
+import { Value, TransactionUnspentOutput, BigNum, Vkeywitnesses, ScriptHash, AssetName, PlutusData, Ed25519KeyHash, BaseAddress, Redeemer, PlutusScripts, TransactionBuilder, Address, TransactionOutputs, TransactionOutput } from './custom_modules/@emurgo/cardano-serialization-lib-browser';
 import CardanoLoader from './CardanoLoader';
 import CardanoProtocolParameters from './Types/CardanoProtocolParam';
 import { contractCbor } from "./contract";
-import { languageViews } from './languageViews';
-import { Value } from './custom_modules/@emurgo/cardano-serialization-lib-nodejs/cardano_serialization_lib';
-import { CoinSelection, setCardanoSerializationLib as setCoinSelectionCardanoSerializationLib } from './coinSelection';
+import { languageViews } from './languageViews'; import { CoinSelection, setCardanoSerializationLib as setCoinSelectionCardanoSerializationLib } from './coinSelection';
+import { PlutusDataObject } from './Types/PlutusDataObject';
+import { PlutusField, PlutusFieldType } from './Types/PlutusField';
 
 const BLOCKFROST_PROJECT_ID = "testnetIQtFV2rODiSJP0ROecSNx89tPRQ69mfN";
-const btnSelector = "btnBuy";
 const CardanoSerializationLib = CardanoLoader.CardanoSerializationLib;
 
+let btnSwap: HTMLButtonElement;
+let txtFrom: HTMLInputElement;
+let txtTo: HTMLInputElement;
+let txtPrice: HTMLInputElement;
+let signalRConnection: HubConnection;
+let Orders: any[] = [];
+
 async function Main() {
+    signalRConnection = new HubConnectionBuilder()
+        .withUrl("http://localhost:1338/swap")
+        .build();
+    await signalRConnection.start();
+
+    await signalRConnection.send("BuyOrderUpdate");
+
+    signalRConnection.on("BuyOrderUpdate", (orders: any[]) => {
+        console.log("buyOrders", orders);
+        Orders = orders;
+
+        const buyTable = (document.getElementById("buyTable") as HTMLTableElement);
+        buyTable.querySelectorAll(".buyOrder").forEach(o => o.remove());
+        orders.forEach(o => {
+            const tr = document.createElement("tr");
+            tr.className = "buyOrder";
+            const tdPrice = document.createElement("td");
+            const tdTotal = document.createElement("td");
+            const tdAction = document.createElement("td");
+            const btnSell = document.createElement("button");
+
+            btnSell.innerText = "Sell";
+            btnSell.onclick = () => ExecuteSell(o);
+
+            tdAction.appendChild(btnSell);
+
+            tr.appendChild(tdPrice);
+            tr.appendChild(tdTotal);
+            tr.appendChild(tdAction);
+
+            tdPrice.innerText = o.Fields[0].Value;
+            tdTotal.innerText = o.Amounts[0].Quantity;
+            (document.getElementById("buyTable") as HTMLTableElement).appendChild(tr);
+        });
+    });
+
     await CardanoLoader.LoadAsync();
-    const btnContract = document.getElementById(btnSelector) as HTMLButtonElement;
-    btnContract.addEventListener("click", ExecuteContract);
+    btnSwap = document.getElementById("btnSwap") as HTMLButtonElement;
+    txtFrom = document.getElementById("txtFrom") as HTMLInputElement;
+    txtTo = document.getElementById("txtTo") as HTMLInputElement;
+    txtPrice = document.getElementById("txtPrice") as HTMLInputElement;
+
+    btnSwap.addEventListener("click", ExecuteSwap);
+    txtFrom.addEventListener("keyup", OnFromChange);
+    txtTo.addEventListener("keyup", OnFromChange);
+}
+
+async function ExecuteSell(order: any) {
+    await BuildSwapTxAsync(order);
+}
+
+async function ExecuteSwap() {
+    CalculatePrice();
+    await BuildOfferTxAsync();
+}
+
+function OnFromChange() {
+    CalculatePrice();
+}
+
+function CalculatePrice() {
+    try {
+        const fromValue = parseInt(txtFrom.value);
+        const toValue = parseInt(txtTo.value);
+        txtPrice.value = (toValue / fromValue).toString();
+    }
+    catch (e) {
+        console.log(e);
+    }
 }
 
 async function ExecuteContract() {
     try {
         // await BuildOfferTxAsync();
-        await BuildSwapTxAsync();
+        // await BuildSwapTxAsync();
     } catch (e) {
         console.dir(e);
     }
@@ -44,15 +117,17 @@ async function BuildOfferTxAsync() {
         const pkh = toHex(baseAddress.payment_cred().to_keyhash()?.to_bytes() as Uint8Array);
 
         const transactionWitnessSet = Cardano.TransactionWitnessSet.new();
-        const datumHash = Cardano.hash_plutus_data(HoskySwapDatum(pkh) as PlutusData);
+        const hoskyDatumObject = HoskySwapDatum(pkh, parseFloat(txtPrice.value) * 1000000) as PlutusDataObject;
+        const datumHash = Cardano.hash_plutus_data(ToPlutusData(hoskyDatumObject) as PlutusData);
 
         console.log("datumHash", toHex(datumHash.to_bytes()));
         console.log("pkh", pkh);
-
+        console.log("value", GetContractOutput()?.coin().to_str());
+        console.log("datumObj", hoskyDatumObject);
 
         const contractOutput = Cardano.TransactionOutput.new(
             ContractAddress() as Address,
-            Cardano.Value.new(toBigNum("12394200"))
+            GetContractOutput() as Value
         );
         contractOutput.set_data_hash(datumHash);
         const transactionOutputs = Cardano.TransactionOutputs.new();
@@ -103,13 +178,12 @@ async function BuildOfferTxAsync() {
             )
         );
 
-        console.log("Full Tx Size", signedTx.to_bytes().length);
-        let result = await window.cardano.submitTx(toHex(signedTx.to_bytes()));
-        console.log("tx submitted", result);
+        console.log("full tx size", signedTx.to_bytes().length);
+        await signalRConnection.send("SubmitOrderTx", toHex(signedTx.to_bytes()), JSON.stringify(hoskyDatumObject));
     }
 }
 
-async function BuildSwapTxAsync() {
+async function BuildSwapTxAsync(order: any) {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
 
@@ -127,27 +201,32 @@ async function BuildSwapTxAsync() {
 
         const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
         const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
-        const pkh = "3e4a2ec70fcef9e54c437a173714d1f82b96242379816bea3dd387dd";
+
+        const pkh = GetPkhFromOrder(order);
+        console.log("pkh", pkh);
+
+        const utxoLovelaceAmount = parseInt(order.Amounts[0].Quantity);
+        const rate = GetRateFromOrder(order);
 
         const scriptUtxo = Cardano.TransactionUnspentOutput.new(
             Cardano.TransactionInput.new(
-                Cardano.TransactionHash.from_bytes(fromHex("b2bb38245e49c21e80c2b78f1c5f0ac8966214919930ffecb4dfc46a674be27e")), 0
+                Cardano.TransactionHash.from_bytes(fromHex(order.TxId)), order.TxIdx
             ),
             Cardano.TransactionOutput.new(
-                Cardano.Address.from_bech32("addr_test1wp8qttdrd4qqvnpnuhmzlqlecnmt7wn3u4erlkncu3y9fhgx4yltu"),
-                Cardano.Value.new(toBigNum("12394200"))
+                ContractAddress() as Address,
+                Cardano.Value.new(toBigNum(utxoLovelaceAmount))
             )
         );
 
         const utxos = await window.cardano.getUtxos();
         const outputs: TransactionOutput[] = [
             Cardano.TransactionOutput.new(
-                Cardano.Address.from_bech32("addr_test1qqly5tk8pl80ne2vgdapwdc568uzh93yyducz6l28hfc0htkdqgkydtswrycyf9hruerftc8mwel9ck6pksvyszs968qhauh2s"),
+                Cardano.Address.from_bech32(order.OwnerAddress),
                 AssetValue(
-                    toBigNum("1500000"),
+                    toBigNum(2000000),
                     "88672eaaf6f5c5fb59ffa5b978016207dbbf769014c6870d31adc4de",
                     "484f534b59",
-                    toBigNum("10000000")
+                    toBigNum(((utxoLovelaceAmount - 2000000 - 1388400) / 1000000) * (rate / 1000000))
                 ) as Value
             ),
             Cardano.TransactionOutput.new(
@@ -183,7 +262,11 @@ async function BuildSwapTxAsync() {
         requiredSigners.add(baseAddress.payment_cred().to_keyhash() as Ed25519KeyHash);
         txBuilder.set_required_signers(requiredSigners);
 
-        const datum = HoskySwapDatum(pkh) as PlutusData;
+        const datumObj = HoskySwapDatum(pkh, rate);
+        const datum = ToPlutusData(datumObj as PlutusDataObject) as PlutusData;
+
+        console.log(toHex(Cardano.hash_plutus_data(datum).to_bytes()));
+
         const datumList = Cardano.PlutusList.new();
         datumList.add(datum);
 
@@ -230,7 +313,7 @@ async function BuildSwapTxAsync() {
             )
         );
 
-        console.log("Full Tx Size", signedTx.to_bytes().length);
+        console.log("full tx size", signedTx.to_bytes().length);
         let result = await window.cardano.submitTx(toHex(signedTx.to_bytes()));
         console.log("tx submitted", result);
     }
@@ -244,6 +327,32 @@ async function GetProtocolProtocolParamsAsync(): Promise<CardanoProtocolParamete
     });
     return await protocolParamsResult.json();
 }
+
+const GetContractOutput = () => {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+        let fromAmount = parseInt(txtFrom.value);
+        if (GetFromUnit() === "ada") {
+            fromAmount *= 1000000;
+            fromAmount += 2000000;
+            fromAmount += 694200 * 2;
+            return Cardano.Value.new(toBigNum(fromAmount));
+        }
+        else {
+            return AssetValue(
+                toBigNum("2000000"),
+                "88672eaaf6f5c5fb59ffa5b978016207dbbf769014c6870d31adc4de",
+                "484f534b59",
+                toBigNum(fromAmount)
+            );
+        }
+    }
+}
+
+const GetFromUnit = () => {
+    const selFrom = document.getElementById("selFrom") as HTMLSelectElement;
+    return selFrom.value;
+};
 
 const AssetValue = (lovelace: BigNum, policyIdHex: string, assetNameHex: string, amount: BigNum) => {
     let Cardano = CardanoSerializationLib();
@@ -267,21 +376,65 @@ const AssetValue = (lovelace: BigNum, policyIdHex: string, assetNameHex: string,
     }
 }
 
-const HoskySwapDatum = (pkh: string) => {
+const ToPlutusData = (plutusDataObj: PlutusDataObject) => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
+
         const datumFields = Cardano.PlutusList.new();
-        datumFields.add(Cardano.PlutusData.new_integer(Cardano.BigInt.from_str("1000000")));
-        datumFields.add(AssetClassDatum("", "") as PlutusData);
-        datumFields.add(AssetClassDatum("88672eaaf6f5c5fb59ffa5b978016207dbbf769014c6870d31adc4de", "484f534b59") as PlutusData);
-        datumFields.add(Cardano.PlutusData.new_bytes(fromHex(pkh)));
+        plutusDataObj.Fields.sort((a, b) => a.Index - b.Index);
+        plutusDataObj.Fields.forEach(f => {
+            if (Cardano === null) return;
+            switch (f.Type) {
+                case PlutusFieldType.Integer:
+                    datumFields.add(Cardano.PlutusData.new_integer(Cardano.BigInt.from_str(f.Value.toString())));
+                    break;
+                case PlutusFieldType.Data:
+                    datumFields.add(ToPlutusData(f.Value) as PlutusData);
+            }
+        })
 
         return Cardano.PlutusData.new_constr_plutus_data(
             Cardano.ConstrPlutusData.new(
-                Cardano.Int.new_i32(0),
+                Cardano.Int.new_i32(plutusDataObj.ConstructorIndex),
                 datumFields
             )
         );
+    }
+}
+
+const HoskySwapDatum = (pkh: string, rate: number) => {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+
+        const hoskySwapDatum = new PlutusDataObject(0);
+        hoskySwapDatum.Fields = [
+            {
+                Index: 0,
+                Type: PlutusFieldType.Integer,
+                Key: "siRate",
+                Value: rate
+            } as PlutusField,
+            {
+                Index: 0,
+                Type: PlutusFieldType.Data,
+                Key: "siFromAsset",
+                Value: AssetClassDatum("", "")
+            } as PlutusField,
+            {
+                Index: 0,
+                Type: PlutusFieldType.Data,
+                Key: "siToAsset",
+                Value: AssetClassDatum("88672eaaf6f5c5fb59ffa5b978016207dbbf769014c6870d31adc4de", "484f534b59")
+            } as PlutusField,
+            {
+                Index: 0,
+                Type: PlutusFieldType.Bytes,
+                Key: "siSeller",
+                Value: pkh
+            } as PlutusField
+        ];
+
+        return hoskySwapDatum;
     }
 }
 
@@ -332,16 +485,23 @@ const SimpleRedeemer = (index: number) => {
 const AssetClassDatum = (policyId: string, assetName: string) => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-        const datumFields = Cardano.PlutusList.new();
-        datumFields.add(Cardano.PlutusData.new_bytes(fromHex(policyId)));
-        datumFields.add(Cardano.PlutusData.new_bytes(fromHex(assetName)));
 
-        return Cardano.PlutusData.new_constr_plutus_data(
-            Cardano.ConstrPlutusData.new(
-                Cardano.Int.new_i32(0),
-                datumFields
-            )
-        );
+        const assetDatum = new PlutusDataObject(0);
+        assetDatum.Fields = [
+            {
+                Index: 0,
+                Type: PlutusFieldType.Bytes,
+                Key: "CurrencySymbol",
+                Value: policyId
+            } as PlutusField,
+            {
+                Index: 1,
+                Type: PlutusFieldType.Bytes,
+                Key: "TokenName",
+                Value: assetName
+            } as PlutusField
+        ];
+        return assetDatum;
     }
 }
 
@@ -374,6 +534,8 @@ const ContractAddress = () => {
 const GetWalletAddressAsync = async () => (await window.cardano.getUsedAddresses())[0];
 const toHex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
 const fromHex = (hex: string) => Buffer.from(hex, "hex");
+const GetPkhFromOrder = (order: any) => order.Fields.filter((f: any) => f.Key === "siSeller")[0].Value.toString();
+const GetRateFromOrder = (order: any) => order.Fields.filter((f: any) => f.Key === "siRate")[0].Value as number;
 
 const toBigNum = (value: any) => {
     let Cardano = CardanoSerializationLib();
@@ -381,5 +543,5 @@ const toBigNum = (value: any) => {
 }
 
 document.onreadystatechange = async () => {
-    if (document.readyState == "complete") await Main();
+    if (document.readyState === "complete") await Main();
 };
