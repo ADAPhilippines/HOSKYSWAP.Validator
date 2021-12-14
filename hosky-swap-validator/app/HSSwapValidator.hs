@@ -60,7 +60,9 @@ mkValidator ContractInfo{..} d _ ctx =
                     Nothing -> traceError "Own input not found"
                     Just i  -> assetClassValueOf (txOutValue $ txInInfoResolved i) (siFromAsset d)
             in
-                price fromAssetAmt (siRate d)
+                if   doesSellerOfferLovelace
+                then price (fromAssetAmt P.- ciRugPullFee P.- ciMinUtxoLovelace P.- ciSellerFeeShare) (siRate d)
+                else price fromAssetAmt (siRate d)
 
         isSellerPaid :: Bool
         isSellerPaid =
@@ -71,9 +73,7 @@ mkValidator ContractInfo{..} d _ ctx =
                 additional :: Integer
                 additional = if doesSellerWantLovelace then ciMinUtxoLovelace else 0
             in
-                if   doesSellerOfferLovelace
-                then traceIfFalse "Payment for lovelace insufficient"       (pricePaid P.>= (minPrice P.- ciRugPullFee P.- ciMinUtxoLovelace P.- ciSellerFeeShare))
-                else traceIfFalse "Payment for asset insufficient"          (pricePaid P.>= minPrice + additional)
+                pricePaid P.>= minPrice + additional
 
         doesSellerOfferLovelace :: Bool
         doesSellerOfferLovelace = siFromAsset d P.== AssetClass (Ada.adaSymbol, Ada.adaToken)
