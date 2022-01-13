@@ -56,7 +56,7 @@ wallet :: Integer -> Wallet
 wallet = fromWalletNumber . WalletNumber
 
 swap1 :: SwapInfo -- trading ADA to HOSKY at 0.00000095 $ADA/$HOSKY
-swap1 = SwapInfo  { siRate = 1
+swap1 = SwapInfo  { siRate = 1000000
                   , siFromAsset = lovelaceAsset
                   , siToAsset = dummyAsset
                   , siSeller = pubKeyHash $ Wallet.walletPubKey $ wallet 1

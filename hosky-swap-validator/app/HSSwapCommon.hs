@@ -58,7 +58,7 @@ PlutusTx.makeLift ''ContractInfo
 
 contractInfo :: ContractInfo
 contractInfo = ContractInfo
-    { ciAdminPKH        = "4a544770e7b504290a37ca5d7c1361add99101b31352a359623458e6"
+    { ciAdminPKH        = "eeab87f40a94ac5276ae70b39b50726d15ac3bb5defab7e3bf4794a8"
     , ciRugPullFee      = 694_200
     , ciMinUtxoLovelace = 2_000_000
     , ciSellerFeeShare  = 300_000

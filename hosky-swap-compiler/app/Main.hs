@@ -46,7 +46,7 @@ writePlutusScript filename scriptSerial =
     siRate = 1000000,
     siFromAsset = AssetClass ("", ""),
     siToAsset = AssetClass ("88672eaaf6f5c5fb59ffa5b978016207dbbf769014c6870d31adc4de", "HOSKY"),
-    siSeller = "945c010ec1c1f884ed778c28b3c644dcc2da1c3b1df4a90924cc51de"
+    siSeller = "54ef2af1ac6c2e8643d480130bd27b52897f26d5003c58956687d85e"
   }
   print $ "Datum value: " <> encode (scriptDataToJson ScriptDataJsonDetailedSchema $ fromPlutusData (PlutusTx.toData si))
   print $ "Redeemer value: " <> encode (scriptDataToJson ScriptDataJsonDetailedSchema $ fromPlutusData (PlutusTx.toData ()))

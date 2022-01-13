@@ -85,7 +85,7 @@ executeSwap si = do
                         feeShare            =   ciSellerFeeShare contractInfo
                         minUtxoLovelace     =   ciMinUtxoLovelace contractInfo
                         adjustments         =   if siFromAsset d == AssetClass (adaSymbol, adaToken) then minUtxoLovelace + rugPullFee + feeShare else 0
-                        swapPrice           =   price (assetClassValueOf (txOutValue $ toTxOut o) (siFromAsset d) - adjustments) (siRate d) - 1
+                        swapPrice           =   price (assetClassValueOf (txOutValue $ toTxOut o) (siFromAsset d) - adjustments) (siRate d)
                         p                   =   assetClassValue (siToAsset d) swapPrice                                         <>
                                                 lovelaceValueOf minUtxoLovelace
                         feeValue            =   lovelaceValueOf $ 2 * rugPullFee
