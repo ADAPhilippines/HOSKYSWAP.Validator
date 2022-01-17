@@ -14,6 +14,7 @@ const CardanoSerializationLib = CardanoLoader.CardanoSerializationLib;
 let btnSwap: HTMLButtonElement;
 let btnBootstrap: HTMLButtonElement;
 let btnWithdraw: HTMLButtonElement;
+let btnCommit: HTMLButtonElement;
 let txtFrom: HTMLInputElement;
 let txtTo: HTMLInputElement;
 let txtPrice: HTMLInputElement;
@@ -63,7 +64,10 @@ async function Main() {
         });
     });
 
-
+    signalRConnection.on("ChainDataUpdate", async () => {
+        console.log("hoskyswap chain data updated!");
+        await signalRConnection.send("BuyOrderUpdate");
+    });
 
     hsVaporSignalRConnection = new HubConnectionBuilder()
     .withUrl("http://localhost:1338/vapor")
@@ -72,6 +76,12 @@ async function Main() {
     await hsVaporSignalRConnection.start();
 
     await hsVaporSignalRConnection.send("VTClaimUtxosUpdate");
+
+    await hsVaporSignalRConnection.send("VTClaimSHadowHSUtxosUpdate", ["48595045534b554c4c303030315f5348"]);
+
+    hsVaporSignalRConnection.on("ChainDataUpdate", async () => {
+        console.log("Vapor chain data updated!");
+    });
 
     hsVaporSignalRConnection.on("VTClaimShadowHSUtxosUpdate", (utxos: any[]) => {
         console.log(utxos);
@@ -98,12 +108,14 @@ async function Main() {
     txtPrice = document.getElementById("txtPrice") as HTMLInputElement;
     btnBootstrap = document.getElementById("btnBootstrap") as HTMLButtonElement;
     btnWithdraw = document.getElementById("btnWithdraw") as HTMLButtonElement;
+    btnCommit = document.getElementById("btnCommit") as HTMLButtonElement;
 
     btnSwap.addEventListener("click", ExecuteSwap);
     txtFrom.addEventListener("keyup", OnFromChange);
     txtTo.addEventListener("keyup", OnFromChange);
-    btnBootstrap.addEventListener("click", BootstrapVTClaimContractAsync);
-    btnWithdraw.addEventListener("click", WithdrawVTClaimContractAsync);
+    btnBootstrap.addEventListener("click", VTClaimBootstrapAsync);
+    btnWithdraw.addEventListener("click", VTClaimWithdrawAsync);
+    btnCommit.addEventListener("click", async () => await VTClaimCommitAsync("HYPESKULL0001"));
     
 }
 
@@ -585,7 +597,14 @@ const VTClaimContractAddress = () => {
     }
 }
 
-async function BootstrapVTClaimContractAsync() {
+const VaporAdminAddress = () => {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+        return Cardano.Address.from_bech32("addr_test1qrdlvngtwzufm26cwtdcdl6a8yau2j8u6wuwhfsxzr9ws0rvwmu9kj7uxdwdnhsxl5mue3sqvfhctwl2kcnh8yy03vvqsdz0m9")
+    }
+}
+
+async function VTClaimBootstrapAsync() {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
         setCoinSelectionCardanoSerializationLib(Cardano);
@@ -621,19 +640,19 @@ async function BootstrapVTClaimContractAsync() {
 
         const shOutput = Cardano.TransactionOutput.new(
             VTClaimContractAddress() as Address,
-            GetShOutput("48595045534b554c4c303030315f5348") as Value
+            GetHypeNftsOutput(["48595045534b554c4c303030315f5348"]) as Value
         );
         shOutput.set_data_hash(shDatumHash);
 
         const vrtOutput = Cardano.TransactionOutput.new(
             VTClaimContractAddress() as Address,
-            GetVrtOutput("48595045534B554C4C535F5652545F30303031") as Value
+            GetHypeNftsOutput(["48595045534B554C4C535F5652545F30303031"]) as Value
         );
         vrtOutput.set_data_hash(vrtDatumHash);
 
         const vtOutput = Cardano.TransactionOutput.new(
             VTClaimContractAddress() as Address,
-            GetVtOutput(["48595045534B554C4C535F56545F53505F4545", "48595045534B554C4C535F56545F4D4B5F43", "48595045534B554C4C535F56545F4E554747455453"]) as Value
+            GetHypeNftsOutput(["48595045534B554C4C535F56545F53505F4545", "48595045534B554C4C535F56545F4D4B5F43", "48595045534B554C4C535F56545F4E554747455453"]) as Value
         );
         vtOutput.set_data_hash(vtDatumHash);
 
@@ -690,13 +709,178 @@ async function BootstrapVTClaimContractAsync() {
         );
 
         console.log("full tx size", signedTx.to_bytes().length);
-        await hsVaporSignalRConnection.send("SubmitTx", toHex(signedTx.to_bytes()), 
+        await hsVaporSignalRConnection.send("SubmitVTClaimBootstrapTx", toHex(signedTx.to_bytes()), 
         [shDatumObject,vrtDatumObject,vtDatumObject]);
 
     }
 }
 
-async function WithdrawVTClaimContractAsync() {
+async function VTClaimCommitAsync(skullName: string) {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+
+        let skullNameHex = toHex(Buffer.from(skullName, "ascii"));
+        let shUtxo = await GetShadowHSData(skullNameHex + "5f5348");
+        let vrtUtxo = vrtUtxos[0]; //Randomize for final version
+        let vrtTokenName = vrtUtxo.Amounts.find((a:any) => a.Unit != "lovelace").Unit.slice(-38);
+
+        console.log("shadow utxo", shUtxo);
+        console.log("vrt utxo", vrtUtxo);
+
+        setCoinSelectionCardanoSerializationLib(Cardano);
+        const protocolParameters = await GetProtocolProtocolParamsAsync();
+        CoinSelection.setProtocolParameters(
+            protocolParameters.min_utxo.toString(),
+            protocolParameters.min_fee_a.toString(),
+            protocolParameters.min_fee_b.toString(),
+            protocolParameters.max_tx_size.toString()
+        );
+
+        const txBuilder = await CreateTransactionBuilderAsync() as TransactionBuilder;
+        const transactionWitnessSet = Cardano.TransactionWitnessSet.new();
+
+        const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
+        const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
+        const pkh = toHex(baseAddress.payment_cred().to_keyhash()?.to_bytes() as Uint8Array);
+        
+        const scriptUtxos = [
+            Cardano.TransactionUnspentOutput.new(
+                Cardano.TransactionInput.new(
+                    Cardano.TransactionHash.from_bytes(fromHex(shUtxo.TxId)), 
+                    shUtxo.TxIdx
+                ),
+                Cardano.TransactionOutput.new(
+                    VTClaimContractAddress() as Address,
+                    GetHypeNftsOutput([skullNameHex + "5f5348"]) as Value
+                )
+            ),
+            Cardano.TransactionUnspentOutput.new(
+                Cardano.TransactionInput.new(
+                    Cardano.TransactionHash.from_bytes(fromHex(vrtUtxo.TxId)), 
+                    vrtUtxo.TxIdx
+                ),
+                Cardano.TransactionOutput.new(
+                    VTClaimContractAddress() as Address,
+                    GetHypeNftsOutput([vrtTokenName]) as Value
+                )
+            )
+        ]
+        
+
+        const newVrtDatumObject = VtClaimVrtDatum(pkh) as PlutusDataObject;
+        const newVrtDatumHash = Cardano.hash_plutus_data(ToPlutusData(newVrtDatumObject) as PlutusData);
+        const vrtTokenOut = Cardano.TransactionOutput.new(
+            VTClaimContractAddress() as Address,
+            GetHypeNftsOutput([vrtTokenName]) as Value
+        )
+        vrtTokenOut.set_data_hash(newVrtDatumHash);
+
+        const outputs: TransactionOutput[] = [
+            Cardano.TransactionOutput.new(
+                selfAddress,
+                GetHypeNftsOutput([skullNameHex]) as Value
+            ),
+            Cardano.TransactionOutput.new(
+                VaporAdminAddress() as Address,
+                GetHypeNftsOutput([skullNameHex + "5f5348"]) as Value
+            ),
+            vrtTokenOut
+        ];
+
+        const transactionOutputs = Cardano.TransactionOutputs.new();
+
+        outputs.forEach(output => transactionOutputs.add(output));
+
+        const utxos = await window.cardano.getUtxos();
+        const csResult = CoinSelection.randomImprove(
+            utxos.map(utxo => Cardano?.TransactionUnspentOutput.from_bytes(fromHex(utxo)) as TransactionUnspentOutput),
+            transactionOutputs,
+            8,
+            scriptUtxos
+        );
+
+        csResult.inputs.forEach((utxo) => {
+            txBuilder.add_input(
+                utxo.output().address(),
+                utxo.input(),
+                utxo.output().amount()
+            );
+        });
+
+        outputs.forEach(output => txBuilder.add_output(output));
+
+        const requiredSigners = Cardano.Ed25519KeyHashes.new();
+        requiredSigners.add(baseAddress.payment_cred().to_keyhash() as Ed25519KeyHash);
+        txBuilder.set_required_signers(requiredSigners);
+
+        const shDatumObject = VtClaimShDatum() as PlutusDataObject;
+        const vrtDatumObject = VtClaimVrtDatum("") as PlutusDataObject;
+
+        const shDatum = ToPlutusData(shDatumObject) as PlutusData;
+        const vrtDatumHash = ToPlutusData(vrtDatumObject) as PlutusData;
+
+        const datumList = Cardano.PlutusList.new();
+        datumList.add(shDatum);
+        datumList.add(vrtDatumHash);
+        datumList.add(ToPlutusData(newVrtDatumObject as PlutusDataObject) as PlutusData)
+
+        const redeemers = Cardano.Redeemers.new();
+        scriptUtxos.forEach(utxo => {
+            const scriptInputIndex = txBuilder.index_of_input(utxo.input());
+            if(toHex(utxo.input().transaction_id().to_bytes()) == shUtxo.TxId && 
+                utxo.input().index() == shUtxo.TxIdx)
+                redeemers.add(vtClaimCommitSkullRedeemer(scriptInputIndex) as Redeemer);
+            else
+                redeemers.add(vtClaimCommitRandomRedeemer(scriptInputIndex) as Redeemer);
+        });
+
+        txBuilder.set_plutus_scripts(VTClaimContractScript() as PlutusScripts);
+        txBuilder.set_plutus_data(Cardano.PlutusList.from_bytes(datumList.to_bytes()));
+        txBuilder.set_redeemers(Cardano.Redeemers.from_bytes(redeemers.to_bytes()));
+
+        transactionWitnessSet.set_plutus_scripts(VTClaimContractScript() as PlutusScripts);
+        transactionWitnessSet.set_plutus_data(Cardano.PlutusList.from_bytes(datumList.to_bytes()));
+        transactionWitnessSet.set_redeemers(Cardano.Redeemers.from_bytes(redeemers.to_bytes()));
+
+        const collateralUnspentTransactions = (await GetCollateralUnspentTransactionOutputAsync()) as TransactionUnspentOutput[];
+        const collateralInputs = Cardano.TransactionInputs.new();
+        collateralUnspentTransactions.forEach(c => collateralInputs.add(c.input()));
+        txBuilder.set_collateral(collateralInputs);
+        txBuilder.add_change_if_needed(selfAddress);
+
+        const txBody = txBuilder.build();
+
+        const transaction = Cardano.Transaction.new(
+            Cardano.TransactionBody.from_bytes(txBody.to_bytes()),
+            Cardano.TransactionWitnessSet.from_bytes(
+                transactionWitnessSet.to_bytes()
+            )
+        );
+
+        const serializedTx = toHex(transaction.to_bytes());
+
+        const txVkeyWitnesses = await window.cardano.signTx(serializedTx, true);
+
+        let signedtxVkeyWitnesses = Cardano.TransactionWitnessSet.from_bytes(
+            fromHex(txVkeyWitnesses)
+        );
+
+        transactionWitnessSet.set_vkeys(signedtxVkeyWitnesses.vkeys() as Vkeywitnesses);
+
+        const signedTx = Cardano.Transaction.new(
+            Cardano.TransactionBody.from_bytes(txBody.to_bytes()),
+            Cardano.TransactionWitnessSet.from_bytes(
+                transactionWitnessSet.to_bytes()
+            )
+        );
+
+        console.log("full tx size", signedTx.to_bytes().length);
+        let result = await window.cardano.submitTx(toHex(signedTx.to_bytes()));
+        console.log("tx submitted", result);
+    }
+}
+
+async function VTClaimWithdrawAsync() {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
 
@@ -717,17 +901,17 @@ async function WithdrawVTClaimContractAsync() {
 
         const shOutput = Cardano.TransactionOutput.new(
             VTClaimContractAddress() as Address,
-            GetShOutput("48595045534b554c4c303030315f5348") as Value
+            GetHypeNftsOutput(["48595045534b554c4c303030315f5348"]) as Value
         );
 
         const vrtOutput = Cardano.TransactionOutput.new(
             VTClaimContractAddress() as Address,
-            GetVrtOutput("48595045534B554C4C535F5652545F30303031") as Value
+            GetHypeNftsOutput(["48595045534B554C4C535F5652545F30303031"]) as Value
         );
 
         const vtOutput = Cardano.TransactionOutput.new(
             VTClaimContractAddress() as Address,
-            GetVtOutput([
+            GetHypeNftsOutput([
                 "48595045534B554C4C535F56545F53505F4545", 
                 "48595045534B554C4C535F56545F4D4B5F43", 
                 "48595045534B554C4C535F56545F4E554747455453"]) as Value
@@ -761,15 +945,15 @@ async function WithdrawVTClaimContractAsync() {
         const outputs: TransactionOutput[] = [
             Cardano.TransactionOutput.new(
                 selfAddress,
-                GetShOutput("48595045534b554c4c303030315f5348") as Value
+                GetHypeNftsOutput(["48595045534b554c4c303030315f5348"]) as Value
             ),
             Cardano.TransactionOutput.new(
                 selfAddress,
-                GetVrtOutput("48595045534B554C4C535F5652545F30303031") as Value
+                GetHypeNftsOutput(["48595045534B554C4C535F5652545F30303031"]) as Value
             ),
             Cardano.TransactionOutput.new(
                 selfAddress,
-                GetVtOutput([
+                GetHypeNftsOutput([
                     "48595045534B554C4C535F56545F53505F4545", 
                     "48595045534B554C4C535F56545F4D4B5F43", 
                     "48595045534B554C4C535F56545F4E554747455453"]) as Value
@@ -866,25 +1050,14 @@ async function WithdrawVTClaimContractAsync() {
     }
 }
 
-const GetShOutput = (assetName: string) => {
-    let val = AssetValue(
-        toBigNum(MinUtxoLovelace),
-        "bf2c603d38ce68c6d875a097b5e6623fe0f5381d9171e06108e0aec9",
-        assetName,
-        toBigNum(1))
-    return val;
+const GetShadowHSData = (name: string) => {
+    console.log("bf2c603d38ce68c6d875a097b5e6623fe0f5381d9171e06108e0aec9" + name)
+    return shadowHSUtxos
+        .find(utxo => utxo.Amounts
+            .find((a: any) => a.Unit.toLowerCase() == "bf2c603d38ce68c6d875a097b5e6623fe0f5381d9171e06108e0aec9" + name));
 }
 
-const GetVrtOutput = (assetName: string) => {
-    let val = AssetValue(
-        toBigNum(MinUtxoLovelace),
-        "bf2c603d38ce68c6d875a097b5e6623fe0f5381d9171e06108e0aec9",
-        assetName,
-        toBigNum(1))
-    return val;
-}
-
-const GetVtOutput = (assetNames: string[]) => {
+const GetHypeNftsOutput = (assetNames: string[]) => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
         let val = Cardano.Value.new(toBigNum(MinUtxoLovelace));
@@ -914,12 +1087,13 @@ const VtClaimVrtDatum = (pkh: string = "") => {
         const datum = new PlutusDataObject(1);
         datum.Fields = [
             {
-                Index: 0,
+                Index: 1,
                 Type: PlutusFieldType.Bytes,
                 Key: "",
                 Value: pkh
             } as PlutusField
         ]
+        console.log(datum);
         return datum
     }
 }
@@ -930,7 +1104,7 @@ const VtClaimVtDatum = (hash: string = "") => {
         const datum = new PlutusDataObject(2);
         datum.Fields = [
             {
-                Index: 0,
+                Index: 2,
                 Type: PlutusFieldType.Bytes,
                 Key: "",
                 Value: hash
@@ -962,6 +1136,50 @@ const vtClaimWithdrawRedeemer = (index: number) => {
     }
 }
 
+const vtClaimCommitSkullRedeemer = (index: number) => {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+        const redeemerData = Cardano.PlutusData.new_constr_plutus_data(
+            Cardano.ConstrPlutusData.new(
+                Cardano.Int.new_i32(0),
+                Cardano.PlutusList.new()
+            )
+        );
+
+        return Cardano.Redeemer.new(
+            Cardano.RedeemerTag.new_spend(),
+            toBigNum(index),
+            redeemerData,
+            Cardano.ExUnits.new(
+                Cardano.BigNum.from_str("2850942"),
+                Cardano.BigNum.from_str("1001551808")
+            )
+        )
+    }
+}
+
+const vtClaimCommitRandomRedeemer = (index: number) => {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+        const redeemerData = Cardano.PlutusData.new_constr_plutus_data(
+            Cardano.ConstrPlutusData.new(
+                Cardano.Int.new_i32(1),
+                Cardano.PlutusList.new()
+            )
+        );
+
+        return Cardano.Redeemer.new(
+            Cardano.RedeemerTag.new_spend(),
+            toBigNum(index),
+            redeemerData,
+            Cardano.ExUnits.new(
+                Cardano.BigNum.from_str("2850942"),
+                Cardano.BigNum.from_str("1001551808")
+            )
+        )
+    }
+}
+
 const VTClaimContractScript = () => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
@@ -973,6 +1191,7 @@ const VTClaimContractScript = () => {
 
 const GetWalletAddressAsync = async () => (await window.cardano.getUsedAddresses())[0];
 const toHex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
+const asciiToHex = (str: string) => Buffer.from(str, "ascii").toString("hex");
 const fromHex = (hex: string) => Buffer.from(hex, "hex");
 const GetPkhFromOrder = (order: any) => order.Fields.filter((f: any) => f.Key === "siSeller")[0].Value.toString();
 const GetRateFromOrder = (order: any) => order.Fields.filter((f: any) => f.Key === "siRate")[0].Value as number;
