@@ -10,7 +10,7 @@ import { PlutusField, PlutusFieldType } from './Types/PlutusField';
 import CardanoChainData from './Types/CardanoChainData';
 import { vaporizeContract } from './vaporizeContract';
 
-const BLOCKFROST_PROJECT_ID = "testnetIQtFV2rODiSJP0ROecSNx89tPRQ69mfN";
+const BLOCKFROST_PROJECT_ID = "0WyRZV2OAzittZ2vuWeDTy1JS2TJSy2n";
 const CardanoSerializationLib = CardanoLoader.CardanoSerializationLib;
 
 let btnSwap: HTMLButtonElement;
@@ -20,6 +20,7 @@ let btnCommit: HTMLButtonElement;
 let btnProve: HTMLButtonElement;
 let btnClaim: HTMLButtonElement;
 let btnVapBootstrap: HTMLButtonElement;
+let btnVapOrder: HTMLButtonElement;
 let btnVaporize: HTMLButtonElement;
 let btnDeliver: HTMLButtonElement;
 
@@ -31,131 +32,204 @@ let hsVaporSignalRConnection: HubConnection;
 let Orders: any[] = [];
 
 let shadowHSUtxos: CardanoChainData[] = [];
-let vapShadowHSUtxos: CardanoChainData[] = [];
 let vrtUtxos: CardanoChainData[] = [];
 let vtUtxos: CardanoChainData[] = [];
+let vapShadowHSUtxos: CardanoChainData[] = [];
 let ptUtxos: CardanoChainData[] = [];
 
 const MIN_UTXO_LOVELACE = 2000000;
 
 async function Main() {
-    signalRConnection = new HubConnectionBuilder()
-        .withUrl("http://localhost:1338/swap")
-        .build();
-    await signalRConnection.start();
+    // signalRConnection = new HubConnectionBuilder()
+    //     .withUrl("http://localhost:1338/swap")
+    //     .build();
+    // await signalRConnection.start();
 
-    await signalRConnection.send("BuyOrderUpdate");
+    // await signalRConnection.send("BuyOrderUpdate");
 
-    signalRConnection.on("BuyOrderUpdate", (orders: any[]) => {
-        console.log("buyOrders", orders);
-        Orders = orders;
+    // signalRConnection.on("BuyOrderUpdate", (orders: any[]) => {
+    //     console.log("buyOrders", orders);
+    //     Orders = orders;
 
-        const buyTable = (document.getElementById("buyTable") as HTMLTableElement);
-        buyTable.querySelectorAll(".buyOrder").forEach(o => o.remove());
-        orders.forEach(o => {
-            const tr = document.createElement("tr");
-            tr.className = "buyOrder";
-            const tdPrice = document.createElement("td");
-            const tdTotal = document.createElement("td");
-            const tdAction = document.createElement("td");
-            const btnSell = document.createElement("button");
+    //     const buyTable = (document.getElementById("buyTable") as HTMLTableElement);
+    //     buyTable.querySelectorAll(".buyOrder").forEach(o => o.remove());
+    //     orders.forEach(o => {
+    //         const tr = document.createElement("tr");
+    //         tr.className = "buyOrder";
+    //         const tdPrice = document.createElement("td");
+    //         const tdTotal = document.createElement("td");
+    //         const tdAction = document.createElement("td");
+    //         const btnSell = document.createElement("button");
 
-            btnSell.innerText = "Sell";
-            btnSell.onclick = () => ExecuteSell(o);
+    //         btnSell.innerText = "Sell";
+    //         btnSell.onclick = () => ExecuteSell(o);
 
-            tdAction.appendChild(btnSell);
+    //         tdAction.appendChild(btnSell);
 
-            tr.appendChild(tdPrice);
-            tr.appendChild(tdTotal);
-            tr.appendChild(tdAction);
+    //         tr.appendChild(tdPrice);
+    //         tr.appendChild(tdTotal);
+    //         tr.appendChild(tdAction);
 
-            tdPrice.innerText = o.Fields[0].Value;
-            tdTotal.innerText = o.Amounts[0].Quantity;
-            (document.getElementById("buyTable") as HTMLTableElement).appendChild(tr);
-        });
-    });
+    //         tdPrice.innerText = o.Fields[0].Value;
+    //         tdTotal.innerText = o.Amounts[0].Quantity;
+    //         (document.getElementById("buyTable") as HTMLTableElement).appendChild(tr);
+    //     });
+    // });
 
-    signalRConnection.on("ChainDataUpdated", async () => {
-        console.log("hoskyswap chain data updated!");
-        await signalRConnection.send("BuyOrderUpdate");
-    });
+    // signalRConnection.on("ChainDataUpdated", async () => {
+    //     console.log("hoskyswap chain data updated!");
+    //     await signalRConnection.send("BuyOrderUpdate");
+    // });
 
     hsVaporSignalRConnection = new HubConnectionBuilder()
     .withUrl("http://localhost:1338/vapor")
     .build();
-    
+
     await hsVaporSignalRConnection.start();
 
-    await hsVaporSignalRConnection.send("VTClaimGetShUtxos", 
-        [ "48595045534B554C4C303030315F5348"
-        , "48595045534b554c4c303030325f5348"
-        , "48595045534b554c4c303030335f5348"
-        , "48595045534b554c4c303030345f5348"
-        , "48595045534b554c4c303030355f5348"
-        , "48595045534b554c4c303030365f5348"
-        , "48595045534b554c4c303030375f5348"
-        , "48595045534b554c4c303030385f5348"
-        , "48595045534b554c4c303030395f5348"
-        , "48595045534b554c4c303030395f5348"
-        , "48595045534B554C4C303031305F5348"
-        ]);
-    // await hsVaporSignalRConnection.send("VTClaimGetVrtUtxos", "");
-    await hsVaporSignalRConnection.send("VTClaimGetVrtUtxos", "b44bf4b3686dd99b0bed0e51868138e7f081952f4049f9d24eaf77c3");
-
-    await hsVaporSignalRConnection.send("VaporizeGetShUtxos", ["48595045534b554c4c303030315f5348", "48595045534b554c4c303030315f5349"]);
-    await hsVaporSignalRConnection.send("VaporizeGetPtUtxos");
-
-    hsVaporSignalRConnection.on("ChainDataUpdated", async () => {
-        console.log("Vapor chain data updated!");
-        await hsVaporSignalRConnection.send("VTClaimGetShUtxos", ["48595045534b554c4c303030315f5348"]);
-        await hsVaporSignalRConnection.send("VTClaimGetVrtUtxos");
-
-        await hsVaporSignalRConnection.send("VaporizeGetShUtxos", ["48595045534b554c4c303030315f5348", "48595045534b554c4c303030315f5349"]);
-        await hsVaporSignalRConnection.send("VaporizeGetPtUtxos");
+    hsVaporSignalRConnection.on("CheckCombinationSuccess", (result: boolean) => {
+        console.log("vaporize combination result", result);
     });
 
-    hsVaporSignalRConnection.on("VTClaimSendShUtxos", async (utxos: CardanoChainData[]) => {
-        console.log("shadow HS utxos: ", utxos);
-        (document.getElementById("shCountCell") as HTMLTableElement).innerHTML = utxos.length.toString();
-        shadowHSUtxos = utxos;
+    hsVaporSignalRConnection.on("CheckCombinationFailed", (message: string) => {
+        console.log("vaporize combination failed", message);
     });
 
-    hsVaporSignalRConnection.on("VTClaimSendVrtUtxos", (utxos: CardanoChainData[]) => {
-        console.log("VRT utxos: ", utxos);
-        (document.getElementById("vrtCountCell") as HTMLTableElement).innerHTML = utxos.length.toString();
-        vrtUtxos = utxos;
+    hsVaporSignalRConnection.on("GetVaporizeShUtxoSuccess", (utxo: CardanoChainData) => {
+        console.log("vaporize sh utxo:", utxo);
+        (document.getElementById("vapShCountCell") as HTMLTableElement).innerHTML = "✅";
     });
 
-    hsVaporSignalRConnection.on("VTClaimSendVTUtxo", async (utxo: CardanoChainData) => {
-        console.log("VT utxos: ", utxo);
-        vtUtxos = [utxo];
-        (document.getElementById("vtCountCell") as HTMLTableElement).innerHTML = vtUtxos.length.toString();
-        await hsVaporSignalRConnection.send("VTClaimGetVrtUtxos", "b44bf4b3686dd99b0bed0e51868138e7f081952f4049f9d24eaf77c3");
+    hsVaporSignalRConnection.on("GetVaporizeShUtxoFailed", (message: string) => {
+        console.log("vaporize sh utxo", message);
     });
 
-    hsVaporSignalRConnection.on("VaporizeSendShUtxos", async (utxos: CardanoChainData[]) => {
-        console.log("Vaporize shadow HS utxos: ", utxos);
-        (document.getElementById("vapShCountCell") as HTMLTableElement).innerHTML = utxos.length.toString();
-        vapShadowHSUtxos = utxos;
-    });
-
-    hsVaporSignalRConnection.on("VaporizeSendPtUtxos", (utxos: CardanoChainData[]) => {
-        console.log("Vaporize PT utxos: ", utxos);
-        (document.getElementById("ptCountCell") as HTMLTableElement).innerHTML = utxos.length.toString();
+    hsVaporSignalRConnection.on("GetVaporizePtUtxosSuccess", (utxos: CardanoChainData[]) => {
+        console.log("vaporize pt utxos:", utxos);
         ptUtxos = utxos;
+        (document.getElementById("ptCountCell") as HTMLTableElement).innerHTML = utxos.length.toString();
     });
 
-    hsVaporSignalRConnection.on("VTClaimShUtxosUpdated", async () => {
-        await hsVaporSignalRConnection.send("VTClaimGetShUtxos", ["48595045534b554c4c303030315f5348"]);
-    });
+    await hsVaporSignalRConnection.send("CheckCombination", "HYPESKULL0001", "HYPESKULLS_VT_M_C");
 
-    hsVaporSignalRConnection.on("VTClaimVrtUtxosUpdated", async () => {
-        await hsVaporSignalRConnection.send("VTClaimGetVrtUtxos");
-    });
+    await hsVaporSignalRConnection.send("GetVaporizeShUtxo", "HYPESKULL0001");
 
-    hsVaporSignalRConnection.on("TxSumbitSuccess", (txId) => {
+    await hsVaporSignalRConnection.send("GetVaporizePtUtxos");
+    // await hsVaporSignalRConnection.send("VTClaimGetShUtxos", 
+    //     [ "48595045534B554C4C303030315F5348"
+    //     , "48595045534b554c4c303030325f5348"
+    //     , "48595045534b554c4c303030335f5348"
+    //     , "48595045534b554c4c303030345f5348"
+    //     , "48595045534b554c4c303030355f5348"
+    //     , "48595045534b554c4c303030365f5348"
+    //     , "48595045534b554c4c303030375f5348"
+    //     , "48595045534b554c4c303030385f5348"
+    //     , "48595045534b554c4c303030395f5348"
+    //     , "48595045534b554c4c303030395f5348"
+    //     , "48595045534B554C4C303031305F5348"
+    //     ]);
+    // await hsVaporSignalRConnection.send("VTClaimGetVrtUtxos", "");
+    // // await hsVaporSignalRConnection.send("VTClaimGetVrtUtxos", "b44bf4b3686dd99b0bed0e51868138e7f081952f4049f9d24eaf77c3");
+
+    // await hsVaporSignalRConnection.send("VaporizeGetShUtxos", ["48595045534b554c4c303030315f5348", "48595045534b554c4c303030315f5349"]);
+    // await hsVaporSignalRConnection.send("VaporizeGetPtUtxos");
+
+    // hsVaporSignalRConnection.on("ChainDataUpdated", async () => {
+    //     console.log("Vapor chain data updated!");
+    //     await hsVaporSignalRConnection.send("VTClaimGetShUtxos", ["48595045534b554c4c303030315f5348"]);
+    //     await hsVaporSignalRConnection.send("VTClaimGetVrtUtxos");
+
+    //     await hsVaporSignalRConnection.send("VaporizeGetShUtxos", ["48595045534b554c4c303030315f5348", "48595045534b554c4c303030315f5349"]);
+    //     await hsVaporSignalRConnection.send("VaporizeGetPtUtxos");
+    // });
+
+    // hsVaporSignalRConnection.on("VTClaimSendShUtxos", async (utxos: CardanoChainData[]) => {
+    //     console.log("shadow HS utxos: ", utxos);
+    //     (document.getElementById("shCountCell") as HTMLTableElement).innerHTML = utxos.length.toString();
+    //     shadowHSUtxos = utxos;
+    // });
+
+    // hsVaporSignalRConnection.on("VTClaimSendVrtUtxos", (utxos: CardanoChainData[]) => {
+    //     console.log("VRT utxos: ", utxos);
+    //     (document.getElementById("vrtCountCell") as HTMLTableElement).innerHTML = utxos.length.toString();
+    //     vrtUtxos = utxos;
+    // });
+
+    // hsVaporSignalRConnection.on("VTClaimSendVTUtxo", async (utxo: CardanoChainData) => {
+    //     console.log("VT utxos: ", utxo);
+    //     vtUtxos = [utxo];
+    //     (document.getElementById("vtCountCell") as HTMLTableElement).innerHTML = vtUtxos.length.toString();
+    //     await hsVaporSignalRConnection.send("VTClaimGetVrtUtxos", "b44bf4b3686dd99b0bed0e51868138e7f081952f4049f9d24eaf77c3");
+    // });
+
+    // hsVaporSignalRConnection.on("VaporizeSendShUtxos", async (utxos: CardanoChainData[]) => {
+    //     console.log("Vaporize shadow HS utxos: ", utxos);
+    //     (document.getElementById("vapShCountCell") as HTMLTableElement).innerHTML = utxos.length.toString();
+    //     vapShadowHSUtxos = utxos;
+    // });
+
+    // hsVaporSignalRConnection.on("VaporizeSendPtUtxos", (utxos: CardanoChainData[]) => {
+    //     console.log("Vaporize PT utxos: ", utxos);
+    //     (document.getElementById("ptCountCell") as HTMLTableElement).innerHTML = utxos.length.toString();
+    //     ptUtxos = utxos;
+    // });
+
+    // hsVaporSignalRConnection.on("VTClaimShUtxosUpdated", async () => {
+    //     await hsVaporSignalRConnection.send("VTClaimGetShUtxos", ["48595045534b554c4c303030315f5348"]);
+    // });
+
+    // hsVaporSignalRConnection.on("VTClaimVrtUtxosUpdated", async () => {
+    //     await hsVaporSignalRConnection.send("VTClaimGetVrtUtxos");
+    // });
+
+    hsVaporSignalRConnection.on("TxSubmitSuccess", (txId) => {
         console.log("Tx submitted:", txId);
     });
+
+    hsVaporSignalRConnection.on("SubmitTxError", () => {
+        console.log("Tx submit failed:");
+    });
+
+    // const ws = new WebSocket("ws://localhost:1339");
+    // ws.onopen = async () => {
+    //     let dappConn: any = await (window.cardano as any).nami.enable();
+
+    //     const signed = await (window.cardano as any).signData(
+    //         (await dappConn.getRewardAddresses())[0],
+    //         Buffer.from(JSON.stringify({
+    //             "skullName": "HYPESKULL1300",
+    //             "vrtName": "HYPESKULLS_VRT_0005"
+    //         }), 'ascii').toString('hex')
+    //     ) as any;
+
+    //     ws.send(JSON.stringify({
+    //         type: "ClaimVt",
+    //         payload: signed
+    //     }));
+
+        // ws.send(JSON.stringify({
+        //     type: "GetClaimableHs",
+        //     payload: [
+        //         "HYPESKULL0001",
+        //         "HYPESKULL0002",
+        //         "HYPESKULL0003"
+        //     ]
+        // }));
+
+        // ws.send(JSON.stringify({
+        //     type: "GetAvailableVrt"
+        // }));
+
+        // ws.send(JSON.stringify({
+        //     type: "GetClaimHistory",
+        //     payload: "stake1uxw8gjxht0matn6r0yj5f066vlyqtrfagpwq4a7z420w5rqvtnvll"
+        // }));
+        // ws.onmessage = (msg) => {
+        //     console.log(msg);
+        //     // const json = JSON.parse(msg.data) as any;
+        //     // console.log((json.payload as string[]).length);
+        // }
+    // }
 
     await CardanoLoader.LoadAsync();
     btnSwap = document.getElementById("btnSwap") as HTMLButtonElement;
@@ -168,6 +242,7 @@ async function Main() {
     btnProve = document.getElementById("btnProve") as HTMLButtonElement;
     btnClaim = document.getElementById("btnClaim") as HTMLButtonElement;
     btnVapBootstrap = document.getElementById("btnVapBootstrap") as HTMLButtonElement;
+    btnVapOrder = document.getElementById("btnVapOrder") as HTMLButtonElement;
     btnVaporize = document.getElementById("btnVaporize") as HTMLButtonElement;
     btnDeliver = document.getElementById("btnDeliver") as HTMLButtonElement;
 
@@ -469,7 +544,7 @@ async function BuildSwapTxAsync(order: any) {
 }
 
 async function GetProtocolProtocolParamsAsync(): Promise<CardanoProtocolParameters> {
-    let protocolParamsResult = await fetch("https://cardano-testnet.blockfrost.io/api/v0/epochs/latest/parameters", {
+    let protocolParamsResult = await fetch("https://cardano-mainnet.blockfrost.io/api/v0/epochs/latest/parameters", {
         "headers": {
             "project_id": BLOCKFROST_PROJECT_ID
         }
@@ -705,14 +780,14 @@ const ContractAddress = () => {
 const VTClaimContractAddress = () => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-        return Cardano.Address.from_bech32("addr_test1wr7832w0fcvyg9vuyvwm2uk7emx69x7fen08dxmc5c6quzgm6er7f")
+        return Cardano.Address.from_bech32("addr1w8q49qgfuua7yjfr24qj5uv6n5jk9tlhm02vqrel4qzc53gzmux09")
     }
 }
 
 const VaporizeContractAddress = () => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-        return Cardano.Address.from_bech32("addr_test1wzksygn0ajc99ujptj42gvh0nwqlt05l9zf9nwavad4uf2c3fdms9")
+        return Cardano.Address.from_bech32("addr_test1wq50rajk3vekunkgz38yu7w9ryeprykkpjug9dm760ynvxg2mzwj7")
     }
 }
 
@@ -1247,7 +1322,7 @@ async function VTClaimWithdrawAsync(vrtUtxo: CardanoChainData, vtUtxo: CardanoCh
 async function VTClaimPulloutAsync() {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-
+        // (window as any).cardano = await (window as any).ccvault.enable();
         setCoinSelectionCardanoSerializationLib(Cardano);
         const protocolParameters = await GetProtocolProtocolParamsAsync();
         CoinSelection.setProtocolParameters(
@@ -1262,44 +1337,46 @@ async function VTClaimPulloutAsync() {
 
         const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
         const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
+        const pkh = toHex(baseAddress.payment_cred().to_keyhash()?.to_bytes() as Uint8Array);
 
-        const shOutput = Cardano.TransactionOutput.new(
-            VTClaimContractAddress() as Address,
-            GetHypeNftsOutput(["48595045534b554c4c303030315f5348"]) as Value
-        );
+        console.log(pkh);
 
-        const vrtOutput = Cardano.TransactionOutput.new(
-            VTClaimContractAddress() as Address,
-            GetHypeNftsOutput(["48595045534B554C4C535F5652545F30303031"]) as Value
-        );
+        // const shOutput = Cardano.TransactionOutput.new(
+        //     VTClaimContractAddress() as Address,
+        //     GetHypeNftsOutput(["48595045534b554c4c303030315f5348"]) as Value
+        // );
+
+        // const vrtOutput = Cardano.TransactionOutput.new(
+        //     VTClaimContractAddress() as Address,
+        //     GetHypeNftsOutput(["48595045534B554C4C535F5652545F30303031"]) as Value
+        // );
 
         const vtOutput = Cardano.TransactionOutput.new(
             VTClaimContractAddress() as Address,
             GetHypeNftsOutput([
-                "48595045534B554C4C535F56545F53505F4545", 
-                "48595045534B554C4C535F56545F4D4B5F43", 
-                "48595045534B554C4C535F56545F4E554747455453"]) as Value
+                "48595045534B554C4C535F56545F525F43", 
+                "48595045534B554C4C535F56545F525F43"], 3000000) as Value
         );
         
         const scriptUtxos = [
+            // Cardano.TransactionUnspentOutput.new(
+            //     Cardano.TransactionInput.new(
+            //         Cardano.TransactionHash.from_bytes(fromHex(shadowHSUtxos[0].TxId)), 
+            //         shadowHSUtxos[0].TxIdx
+            //     ),
+            //     shOutput
+            // ),
+            // Cardano.TransactionUnspentOutput.new(
+            //     Cardano.TransactionInput.new(
+            //         Cardano.TransactionHash.from_bytes(fromHex(vrtUtxos[0].TxId)), 
+            //         vrtUtxos[0].TxIdx
+            //     ),
+            //     vrtOutput
+            // ),
             Cardano.TransactionUnspentOutput.new(
                 Cardano.TransactionInput.new(
-                    Cardano.TransactionHash.from_bytes(fromHex(shadowHSUtxos[0].TxId)), 
-                    shadowHSUtxos[0].TxIdx
-                ),
-                shOutput
-            ),
-            Cardano.TransactionUnspentOutput.new(
-                Cardano.TransactionInput.new(
-                    Cardano.TransactionHash.from_bytes(fromHex(vrtUtxos[0].TxId)), 
-                    vrtUtxos[0].TxIdx
-                ),
-                vrtOutput
-            ),
-            Cardano.TransactionUnspentOutput.new(
-                Cardano.TransactionInput.new(
-                    Cardano.TransactionHash.from_bytes(fromHex(vtUtxos[0].TxId)), 
-                    vtUtxos[0].TxIdx
+                    Cardano.TransactionHash.from_bytes(fromHex("29f24880a8ec6ddfcce2e99b59f4c5c3c5a0355bb224c7e92b84705d6f6c5af1")), 
+                    0
                 ),
                 vtOutput
             ),
@@ -1307,20 +1384,19 @@ async function VTClaimPulloutAsync() {
 
         const utxos = await window.cardano.getUtxos();
         const outputs: TransactionOutput[] = [
-            Cardano.TransactionOutput.new(
-                selfAddress,
-                GetHypeNftsOutput(["48595045534b554c4c303030315f5348"]) as Value
-            ),
-            Cardano.TransactionOutput.new(
-                selfAddress,
-                GetHypeNftsOutput(["48595045534B554C4C535F5652545F30303031"]) as Value
-            ),
+            // Cardano.TransactionOutput.new(
+            //     selfAddress,
+            //     GetHypeNftsOutput(["48595045534b554c4c303030315f5348"]) as Value
+            // ),
+            // Cardano.TransactionOutput.new(
+            //     selfAddress,
+            //     GetHypeNftsOutput(["48595045534B554C4C535F5652545F30303031"]) as Value
+            // ),
             Cardano.TransactionOutput.new(
                 selfAddress,
                 GetHypeNftsOutput([
-                    "48595045534B554C4C535F56545F53505F4545", 
-                    "48595045534B554C4C535F56545F4D4B5F43", 
-                    "48595045534B554C4C535F56545F4E554747455453"]) as Value
+                    "48595045534B554C4C535F56545F525F43", 
+                    "48595045534B554C4C535F56545F525F43"], 3000000) as Value
             )
         ];
 
@@ -1349,18 +1425,18 @@ async function VTClaimPulloutAsync() {
         requiredSigners.add(baseAddress.payment_cred().to_keyhash() as Ed25519KeyHash);
         txBuilder.set_required_signers(requiredSigners);
 
-        const shDatumObject = VTClaimShDatum() as PlutusDataObject;
-        const vrtDatumObject = VTClaimVrtDatum("") as PlutusDataObject;
-        const vtDatumObject = VTClaimVtDatum("d3c81d34ac1ebd82c9f7afe1a19b2ccb5200b5e82830de42d8545f251c08c77a") as PlutusDataObject;
+        // const shDatumObject = VTClaimShDatum() as PlutusDataObject;
+        // const vrtDatumObject = VTClaimVrtDatum("") as PlutusDataObject;
+        const vtDatumObject = VTClaimVtDatum("ee1001abfc435372db58d4c33b7ed87ac3822ec8c23337a52d15b427f2eadf07") as PlutusDataObject;
 
-        const shDatum = ToPlutusData(shDatumObject) as PlutusData;
-        const vrtDatumHash = ToPlutusData(vrtDatumObject) as PlutusData;
+        // const shDatum = ToPlutusData(shDatumObject) as PlutusData;
+        // const vrtDatumHash = ToPlutusData(vrtDatumObject) as PlutusData;
         const vtDatumHash = ToPlutusData(vtDatumObject) as PlutusData;
 
         const datumList = Cardano.PlutusList.new();
-        datumList.add(shDatum);
-        datumList.add(vrtDatumHash);
-        datumList.add(vtDatumHash);
+        // datumList.add(shDatum);
+        // datumList.add(vrtDatumHash);
+        datumList.add(ToPlutusData(vtDatumObject) as PlutusData);
 
         const redeemers = Cardano.Redeemers.new();
         scriptUtxos.forEach(utxo => {
@@ -1409,7 +1485,9 @@ async function VTClaimPulloutAsync() {
         );
 
         console.log("full tx size", signedTx.to_bytes().length);
-        await hsVaporSignalRConnection.send("SubmitVTClaimTx", toHex(signedTx.to_bytes()), []);
+        var result = await window.cardano.submitTx(toHex(signedTx.to_bytes()));
+        console.log(result);
+        // await hsVaporSignalRConnection.send("SubmitVTClaimTx", toHex(signedTx.to_bytes()), []);
     }
 }
 
@@ -1425,13 +1503,13 @@ async function VaporizeBootstrapAsync() {
             protocolParameters.max_tx_size.toString()
         );
 
-        if (!await window.cardano.isEnabled()) await window.cardano.enable();
+        if (!await window.cardano.nami.isEnabled()) await window.cardano.nami.enable();
         const txBuilder = await CreateTransactionBuilderAsync() as TransactionBuilder;
         const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
         
         const transactionWitnessSet = Cardano.TransactionWitnessSet.new();
         const shDatumObject = VaporizeShDatum("", 0, 0) as PlutusDataObject;
-        const ptDatumObject = VaporizePtDatum(70) as PlutusDataObject;
+        const ptDatumObject = VaporizePtDatum(70_000_000) as PlutusDataObject;
 
         const shDatumHash = Cardano.hash_plutus_data(ToPlutusData(shDatumObject) as PlutusData);
         const ptDatumHash = Cardano.hash_plutus_data(ToPlutusData(ptDatumObject) as PlutusData);
@@ -1903,10 +1981,10 @@ const VTClaimVtDatum = (hash: string = "") => {
     }
 }
 
-const VaporizePtDatum = (price: number = 70) => {
+const VaporizePtDatum = (price: number = 70_000_000) => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-        const datum = new PlutusDataObject(1);
+        const datum = new PlutusDataObject(2);
         datum.Fields = [
             {
                 Index: 0,
@@ -1922,7 +2000,7 @@ const VaporizePtDatum = (price: number = 70) => {
 const VaporizeShDatum = (pkh: string = "", orders: number = 0, delivered: number = 0) => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-        const datum = new PlutusDataObject(0);
+        const datum = new PlutusDataObject(1);
         datum.Fields = [
             {
                 Index: 0,
@@ -1947,13 +2025,13 @@ const VaporizeList = (pkh: string = "", orders: number = 0, delivered: number = 
                 Value: pkh
             } as PlutusField,
             {
-                Index: 0,
+                Index: 1,
                 Type: PlutusFieldType.Integer,
                 Key: "orders",
                 Value: orders
             } as PlutusField,
             {
-                Index: 0,
+                Index: 2,
                 Type: PlutusFieldType.Integer,
                 Key: "delivered",
                 Value: delivered

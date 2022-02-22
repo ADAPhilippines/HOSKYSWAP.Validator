@@ -12,6 +12,7 @@ type CardanoDAPPConnector = {
     signTx(tx: string, b: boolean): Promise<string>;
     submitTx(txCBORHex: string): Promise<any>;
     getCollateral() : Promise<string[]>
+    nami: any;
 }
 
 export default CardanoDAPPConnector;
