@@ -10,6 +10,7 @@ import { PlutusDataObject } from './Types/PlutusDataObject';
 import { PlutusField, PlutusFieldType } from './Types/PlutusField';
 import CardanoChainData from './Types/CardanoChainData';
 import { vaporizeContract } from './vaporizeContract';
+import { VaporizeAction } from './Types/VaporizeAction';
 
 const BLOCKFROST_PROJECT_ID = "testnettDFCIHSx8zC2Xja2elCjyxH0clNdwvbL";
 const CardanoSerializationLib = CardanoLoader.CardanoSerializationLib;
@@ -23,7 +24,9 @@ let btnClaim: HTMLButtonElement;
 let btnVapBootstrap: HTMLButtonElement;
 let btnVapOrder: HTMLButtonElement;
 let btnVaporize: HTMLButtonElement;
+let btnVapRefund: HTMLButtonElement;
 let btnDeliver: HTMLButtonElement;
+let btnVapWithdraw: HTMLButtonElement;
 
 let txtFrom: HTMLInputElement;
 let txtTo: HTMLInputElement;
@@ -39,7 +42,9 @@ let vapShadowHSUtxo: CardanoChainData;
 let ptUtxos: CardanoChainData[] = [];
 let orderUtxos: CardanoChainData[] = [];
 
-const MIN_UTXO_LOVELACE = 2000000;
+const MIN_UTXO_LOVELACE = 2000000;        
+const VAPORIZER_FEE = 3_000_000;
+const RESS_TOKEN_DISCOUNT = 20_000_000;
 
 async function Main() {
     // signalRConnection = new HubConnectionBuilder()
@@ -100,7 +105,7 @@ async function Main() {
     hsVaporSignalRConnection.on("GetVaporizeShUtxoSuccess", (utxo: CardanoChainData) => {
         console.log("vaporize sh utxo:", utxo);
         vapShadowHSUtxo = utxo;
-        (document.getElementById("vapShCountCell") as HTMLTableElement).innerHTML = "✅";
+        (document.getElementById("vapShCountCell") as HTMLTableElement).innerHTML = utxo !== null ? "✅" : "❌";
     });
 
     hsVaporSignalRConnection.on("GetVaporizeShUtxoFailed", (message: string) => {
@@ -121,6 +126,10 @@ async function Main() {
         console.log("vaporize min price:", price);
     });
 
+    hsVaporSignalRConnection.on("VaporizePriceUpdate", (price: number) => {
+        console.log("vaporize min price updated:", price);
+    });
+
     hsVaporSignalRConnection.on("GetVaporizeOrderUtxosSuccess", (utxos: CardanoChainData[]) => {
         console.log("vaporize order utxos:", utxos);
         orderUtxos = utxos;
@@ -131,7 +140,23 @@ async function Main() {
         console.log("vaporize order utxos:", message);
     });
 
-    await hsVaporSignalRConnection.send("CheckCombination", "HYPESKULL0001", "HYPESKULLS_VT_M_C");
+    hsVaporSignalRConnection.on("GetVaporizeHistorySuccess", (history: any[]) => {
+        console.log("vaporize history:", history);
+    });
+
+    hsVaporSignalRConnection.on("GetVaporizeHistoryFailed", (message: string) => {
+        console.log("vaporize history failed:", message);
+    });
+
+    hsVaporSignalRConnection.on("GetVaporizeCountSuccess", (count: number) => {
+        console.log("vaporize count:", count);
+    });
+
+    hsVaporSignalRConnection.on("VaporizationHistoryUpdate", (vaporization: any) => {
+        console.log("new vaporization", vaporization);
+    });
+
+    await hsVaporSignalRConnection.send("CheckCombination", "HYPESKULL0001", "HYPESKULLS_VT_Z_C");
 
     await hsVaporSignalRConnection.send("GetVaporizeShUtxo", "HYPESKULL0001");
 
@@ -140,6 +165,10 @@ async function Main() {
     await hsVaporSignalRConnection.send("GetVaporizeMinPrice");
 
     await hsVaporSignalRConnection.send("GetVaporizeOrderUtxos");
+
+    await hsVaporSignalRConnection.send("GetVaporizeHistory");
+
+    await hsVaporSignalRConnection.send("GetVaporizeCount");
     // await hsVaporSignalRConnection.send("VTClaimGetShUtxos", 
     //     [ "48595045534B554C4C303030315F5348"
     //     , "48595045534b554c4c303030325f5348"
@@ -269,7 +298,9 @@ async function Main() {
     btnVapBootstrap = document.getElementById("btnVapBootstrap") as HTMLButtonElement;
     btnVapOrder = document.getElementById("btnVapOrder") as HTMLButtonElement;
     btnVaporize = document.getElementById("btnVaporize") as HTMLButtonElement;
+    btnVapRefund = document.getElementById("btnVapRefund") as HTMLButtonElement;
     btnDeliver = document.getElementById("btnDeliver") as HTMLButtonElement;
+    btnVapWithdraw = document.getElementById("btnVapWithdraw") as HTMLButtonElement;
 
     btnSwap.addEventListener("click", ExecuteSwap);
     txtFrom.addEventListener("keyup", OnFromChange);
@@ -284,22 +315,47 @@ async function Main() {
     btnClaim.addEventListener("click", async () => await SendVTClaimWithdrawTxAsync());
     btnVapOrder.addEventListener("click", async () => await SendVaporizeOrderTxAsync());
     btnVaporize.addEventListener("click", async () => await SendVaporizeSkullTxAsync());
-    btnDeliver.addEventListener("click", async () => await SendDeliverTxAsync());
+    btnVapRefund.addEventListener("click", async () => await SendVaporizeRefundTxAsync());
+    btnDeliver.addEventListener("click", async () => await SendVaporizeDeliverTxAsync());
+    btnVapWithdraw.addEventListener("click", async () => await SendVaporizeWithdrawTxAsync());
 }
 
-async function SendDeliverTxAsync()
+
+
+async function SendVaporizeWithdrawTxAsync()
 {
-    await VaporizeDeliverAsync("HYPESKULL0001_M_C", "addr_test1qz6yha9ndpkanxcta589rp5p8rnlpqv49aqyn7wjf6hh0se88sefrwas2hky0jrjd7rdq9trd0nt8zga423ymj8nvc2qcr6nt8",vapShadowHSUtxo);
+    // var ownerPkh = GetVaporizeOrderPkh(vapShadowHSUtxo);
+    // var skullVaporOrders = GetVaporizeOrderList(vapShadowHSUtxo);
+    // var skullVaporDeliveries = GetVaporizeDeliveryList(vapShadowHSUtxo);
+    // const shDatumObject = VaporizeShDatum(ownerPkh, skullVaporOrders, skullVaporDeliveries) as PlutusDataObject;   
+    // const shDatum = ToPlutusData(shDatumObject) as PlutusData;
+
+    // await VaporizeWithdrawAsync(vapShadowHSUtxo, shDatum);
+
+    const ptDatumObject = VaporizePtDatum(ptUtxos[0].Fields[0].Value as number) as PlutusDataObject;
+    const ptDatum = ToPlutusData(ptDatumObject) as PlutusData;
+
+    await VaporizeWithdrawAsync(ptUtxos[0], ptDatum);
+}
+
+async function SendVaporizeDeliverTxAsync()
+{
+    await VaporizeDeliverAsync("HYPESKULL0001_Z_C", vapShadowHSUtxo);
 }
 
 async function SendVaporizeOrderTxAsync()
 {
-    await VaporizeOrderAsync(50_000_000,"HYPESKULL0001","HYPESKULLS_VT_M_C", true);
+    await VaporizeOrderAsync(100_000_000,"HYPESKULL0001","HYPESKULLS_VT_Z_C", true);
 }
 
 async function SendVaporizeSkullTxAsync()
 {
     await VaporizeSkullAsync(orderUtxos[0], vapShadowHSUtxo, ptUtxos[0]);
+}
+
+async function SendVaporizeRefundTxAsync()
+{
+    await VaporizeRefundAsync(orderUtxos[0]);
 }
 
 async function SendVTClaimCommitTxAsync()
@@ -738,7 +794,7 @@ const CreateTransactionBuilderAsync = async () => {
         const txBuilder = Cardano.TransactionBuilder.new(
             Cardano.LinearFee.new(
                 toBigNum(protocolParams.min_fee_a),
-                toBigNum(protocolParams.min_fee_b + 100000)
+                toBigNum(protocolParams.min_fee_b + 50_000)
             ),
             toBigNum("1000000"),
             toBigNum("500000000"),
@@ -834,7 +890,7 @@ const VTClaimContractAddress = () => {
 const VaporizeContractAddress = () => {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-        return Cardano.Address.from_bech32("addr_test1wq50rajk3vekunkgz38yu7w9ryeprykkpjug9dm760ynvxg2mzwj7")
+        return Cardano.Address.from_bech32("addr_test1wq6xf4834q9uqvmywsflhrq304gjsjtnh7zspdlqh6dxsxsjac68g")
     }
 }
 
@@ -1635,6 +1691,7 @@ async function VaporizeBootstrapAsync() {
 
     }
 }
+
 async function VaporizeOrderAsync(price: number, skullName: string, vtName: string, hasRessToken: boolean) {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
@@ -1643,7 +1700,7 @@ async function VaporizeOrderAsync(price: number, skullName: string, vtName: stri
         CoinSelection.setProtocolParameters(
             protocolParameters.min_utxo.toString(),
             protocolParameters.min_fee_a.toString(),
-            (protocolParameters.min_fee_b + 50000).toString(), //Added 0.05 Ada to fee to account for metadata addition
+            (protocolParameters.min_fee_b + 50_000).toString(), //Added 0.05 Ada to fee to account for metadata addition
             protocolParameters.max_tx_size.toString()
         );
 
@@ -1741,7 +1798,12 @@ async function VaporizeOrderAsync(price: number, skullName: string, vtName: stri
                 "address": [
                     selfAddress.to_bech32().slice(0,64),
                     selfAddress.to_bech32().substring(64)
-                ]
+                ],
+                "action": VaporizeAction.Order,
+                "skullName": skullName,
+                "vaporName": vtName,
+                "hasRessToken": hasRessToken ? "true" : "false",
+                "price": price
             }), 0)
         );
 
@@ -1802,14 +1864,16 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
 
         const vtAmount = orderUtxo.Amounts
             .find(a => a.Unit.toLowerCase()
-                .startsWith(`${vaporPolicy}48595045534b554c4c535f56545f`) &&
+                .startsWith(`${vaporPolicy}${asciiToHex("HYPESKULLS_VT_")}`) &&
                 a.Quantity == 1);
 
         const ressTokenAmount = orderUtxo.Amounts
             .find(a => a.Unit.toLowerCase() == `${originPolicy}${asciiToHex("HYPESKULLSRESURRECTION")}` &&
             a.Quantity == 1);
         
-        if(ogSkullAmount === undefined || vtAmount === undefined) {
+        const orderLovelaceAmount = orderUtxo.Amounts.find(a => a.Unit == "lovelace");
+        
+        if(ogSkullAmount === undefined || vtAmount === undefined || orderLovelaceAmount === undefined) {
             console.log("invalid order utxo");
             return;
         }
@@ -1819,7 +1883,7 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
         CoinSelection.setProtocolParameters(
             protocolParameters.min_utxo.toString(),
             protocolParameters.min_fee_a.toString(),
-            protocolParameters.min_fee_b.toString(),
+            (protocolParameters.min_fee_b + 50_000).toString(),
             protocolParameters.max_tx_size.toString()
         );
 
@@ -1827,9 +1891,7 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
         const transactionWitnessSet = Cardano.TransactionWitnessSet.new();
 
         const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
-        const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
-        const pkh = toHex(baseAddress.payment_cred().to_keyhash()?.to_bytes() as Uint8Array);
-        console.log(pkh);
+
         const orderInputUtxo = Cardano.TransactionUnspentOutput.new(
             Cardano.TransactionInput.new(
                 Cardano.TransactionHash.from_bytes(fromHex(orderUtxo.TxId)), 
@@ -1860,13 +1922,13 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
             ptInputUtxo,
         ]
 
-        var vaporizePrice = ptUtxo.Fields[0].Value as number;
-
-        const newPtDatumObject = VaporizePtDatum(vaporizePrice + 10_000_000) as PlutusDataObject;
+        const currentPrice = ptUtxo.Fields[0].Value as number;
+        const newPtDatumObject = VaporizePtDatum(currentPrice + 10_000_000) as PlutusDataObject;
         const newPtDatum = ToPlutusData(newPtDatumObject) as PlutusData;
         const newPtDatumHash = Cardano.hash_plutus_data(newPtDatum);
         const ptTokenOut = GetOutputFromChainData(VaporizeContractAddress() as Address, ptUtxo) as TransactionOutput
         ptTokenOut.set_data_hash(newPtDatumHash);
+        console.log(toHex(Cardano.DataHash.from_bytes(newPtDatumHash.to_bytes()).to_bytes()),newPtDatum);
 
         const vtName = fromHex(vtAmount.Unit.substring(56)).toString("ascii");
         const vaporizeOrders = GetVaporizeOrderList(shUtxo);
@@ -1875,20 +1937,24 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
         const vtSigIndex = VaporTokenNames.indexOf(vtSig);
         const vtSigValue = Math.pow(2, vtSigIndex);
 
+        console.log(vtName, vtSig, vtSigIndex, vtSigValue);
+
         const newShDatumObject = VaporizeShDatum(orderUtxo.Fields[0].Value as string, vaporizeOrders + vtSigValue, vaporizeDeliveries) as PlutusDataObject;
         const newShDatum = ToPlutusData(newShDatumObject) as PlutusData;
         const newShDatumHash = Cardano.hash_plutus_data(newShDatum);
         const shTokenOut = GetOutputFromChainData(VaporizeContractAddress() as Address, shUtxo) as TransactionOutput
         shTokenOut.set_data_hash(newShDatumHash);
+        console.log(toHex(Cardano.DataHash.from_bytes(newShDatumHash.to_bytes()).to_bytes()),newShDatum);
 
-        let adminOutputValue = Cardano.Value.new(Cardano.BigNum.from_str((vaporizePrice - MIN_UTXO_LOVELACE - MIN_UTXO_LOVELACE).toString()));
+        let adminOutputValue = Cardano.Value.new(Cardano.BigNum.from_str("0"));
+        let vaporizePrice = currentPrice - MIN_UTXO_LOVELACE - VAPORIZER_FEE;
 
         const vtMaValue = AssetValue(
             toBigNum(0),
             vtAmount.Unit.slice(0,56),
             vtAmount.Unit.substring(56),
             toBigNum(1)) as Value;
-        
+
         adminOutputValue = adminOutputValue.checked_add(vtMaValue);
             
         if(ressTokenAmount !== undefined) {
@@ -1899,8 +1965,10 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
                 toBigNum(1)) as Value;
             
             adminOutputValue = adminOutputValue.checked_add(ressMaValue);
-            adminOutputValue = adminOutputValue.checked_sub(Cardano.Value.new(Cardano.BigNum.from_str("20000000")));
+            vaporizePrice -= RESS_TOKEN_DISCOUNT;
         }
+
+        adminOutputValue = adminOutputValue.checked_add(Cardano.Value.new(Cardano.BigNum.from_str(vaporizePrice.toString())));
 
         const adminOutput = Cardano.TransactionOutput.new(
             VaporAdminAddress() as Address,
@@ -1909,7 +1977,8 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
 
         const ownerBech32Address = await GetOwnerAddressAsync(orderUtxo.TxId) as string;
 
-        let ownerOutputValue = Cardano.Value.new(Cardano.BigNum.from_str(MIN_UTXO_LOVELACE.toString()));
+        const ownerLovelaceAmount = orderLovelaceAmount.Quantity - vaporizePrice - VAPORIZER_FEE;
+        let ownerOutputValue = Cardano.Value.new(Cardano.BigNum.from_str(ownerLovelaceAmount.toString()));
 
         const ogSkullMaValue = AssetValue(
             toBigNum(0),
@@ -1918,9 +1987,6 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
             toBigNum(1)) as Value;
 
         ownerOutputValue = ownerOutputValue.checked_add(ogSkullMaValue);
-
-        console.log(ownerBech32Address);
-        console.log(Cardano.Address.from_bech32(ownerBech32Address));
         
         const ownerOutput = Cardano.TransactionOutput.new(
             Cardano.Address.from_bech32(ownerBech32Address),
@@ -1962,22 +2028,15 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
         });
 
         outputs.forEach(output => txBuilder.add_output(output));
-
-        // const requiredSigners = Cardano.Ed25519KeyHashes.new();
-        // requiredSigners.add(baseAddress.payment_cred().to_keyhash() as Ed25519KeyHash);
-        // txBuilder.set_required_signers(requiredSigners);
         
-        const ptDatumObject = VaporizePtDatum(vaporizePrice) as PlutusDataObject;
+        const ptDatumObject = VaporizePtDatum(currentPrice) as PlutusDataObject;
         const ptDatum = ToPlutusData(ptDatumObject) as PlutusData;
-        console.log(newPtDatumObject);
 
         const shDatumObject = VaporizeShDatum(GetVaporizeOrderPkh(shUtxo), vaporizeOrders, vaporizeDeliveries) as PlutusDataObject;   
         const shDatum = ToPlutusData(shDatumObject) as PlutusData;
-        console.log(newShDatumObject);
         
         const orderDatumObject = VaporizeOrderDatum(orderUtxo.Fields[0].Value as string) as PlutusDataObject;
         const orderDatum = ToPlutusData(orderDatumObject) as PlutusData;
-        console.log(orderDatumObject);
 
         const datumList = Cardano.PlutusList.new();
         datumList.add(orderDatum);
@@ -2013,11 +2072,37 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
 
         const txBody = txBuilder.build();
 
+        const generalMetadata = Cardano.GeneralTransactionMetadata.new();
+        generalMetadata.insert(
+            Cardano.BigNum.from_str("7283"),
+            Cardano.encode_json_str_to_metadatum(JSON.stringify({
+                "pkh": orderUtxo.Fields[0].Value as string,
+                "address": [
+                    ownerBech32Address.slice(0,64),
+                    ownerBech32Address.substring(64)
+                ],
+                "skullName": fromHex(ogSkullAmount.Unit.substring(56)).toString("ascii"),
+                "vaporName": vtName,
+                "action": VaporizeAction.Vaporize,
+                "orderTxId": orderUtxo.TxId,
+                "hasRessToken": ressTokenAmount !== undefined ? "true" : "false",
+                "currentPrice": currentPrice,
+                "vaporizerFee": VAPORIZER_FEE
+            }), 0)
+        );
+
+        let auxiliaryData = Cardano.AuxiliaryData.new();
+        auxiliaryData.set_metadata(generalMetadata)
+        txBody.set_auxiliary_data_hash(Cardano.hash_auxiliary_data(
+            Cardano.AuxiliaryData.from_bytes(auxiliaryData.to_bytes())
+        ));
+
         const transaction = Cardano.Transaction.new(
             Cardano.TransactionBody.from_bytes(txBody.to_bytes()),
             Cardano.TransactionWitnessSet.from_bytes(
                 transactionWitnessSet.to_bytes()
-            )
+            ),
+            Cardano.AuxiliaryData.from_bytes(auxiliaryData.to_bytes())
         );
 
         const serializedTx = toHex(transaction.to_bytes());
@@ -2034,22 +2119,23 @@ async function VaporizeSkullAsync(orderUtxo: CardanoChainData, shUtxo: CardanoCh
             Cardano.TransactionBody.from_bytes(txBody.to_bytes()),
             Cardano.TransactionWitnessSet.from_bytes(
                 transactionWitnessSet.to_bytes()
-            )
+            ),
+            Cardano.AuxiliaryData.from_bytes(auxiliaryData.to_bytes())
         );
 
         console.log("full tx size", signedTx.to_bytes().length);
         console.log("submitting tx");
-        const result = await window.cardano.submitTx(toHex(signedTx.to_bytes()));
-        console.log(result);
-        // await hsVaporSignalRConnection.send("SubmitVaporizeTx", toHex(signedTx.to_bytes()), 
-        // [newPtDatumObject, newShDatumObject]);
+        // const result = await window.cardano.submitTx(toHex(signedTx.to_bytes()));
+        // console.log(result);
+        await hsVaporSignalRConnection.send("SubmitVaporizeTx", toHex(signedTx.to_bytes()), 
+        [newPtDatumObject, newShDatumObject]);
     }
 }
 
-async function VaporizeDeliverAsync(vhsName: string, vaporizerAddr: string, shUtxo: CardanoChainData) {
+async function VaporizeRefundAsync(orderUtxo: CardanoChainData) {
     let Cardano = CardanoSerializationLib();
     if (Cardano !== null) {
-        console.log("sh utxo", shUtxo);
+        console.log("order utxo", orderUtxo);
 
         setCoinSelectionCardanoSerializationLib(Cardano);
         const protocolParameters = await GetProtocolProtocolParamsAsync();
@@ -2063,42 +2149,38 @@ async function VaporizeDeliverAsync(vhsName: string, vaporizerAddr: string, shUt
         const txBuilder = await CreateTransactionBuilderAsync() as TransactionBuilder;
         const transactionWitnessSet = Cardano.TransactionWitnessSet.new();
 
-        const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
-        const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
-        
+        const orderInputUtxo = Cardano.TransactionUnspentOutput.new(
+            Cardano.TransactionInput.new(
+                Cardano.TransactionHash.from_bytes(fromHex(orderUtxo.TxId)), 
+                orderUtxo.TxIdx
+            ),
+            GetOutputFromChainData(VaporizeContractAddress() as Address, orderUtxo) as TransactionOutput
+        );
+
         const scriptUtxos = [
-            Cardano.TransactionUnspentOutput.new(
-                Cardano.TransactionInput.new(
-                    Cardano.TransactionHash.from_bytes(fromHex(shUtxo.TxId)), 
-                    shUtxo.TxIdx
-                ),
-                GetOutputFromChainData(VaporizeContractAddress() as Address, shUtxo) as TransactionOutput
-            )
+            orderInputUtxo
         ]
 
-        var vaporizerPkh = GetVaporizeOrderPkh(shUtxo);
-        var vaporizeOrders = GetVaporizeOrderList(shUtxo);
-        var vaporizeDeliveries = GetVaporizeDeliveryList(shUtxo);
+        const ownerBech32Address = await GetOwnerAddressAsync(orderUtxo.TxId) as string;
 
-        var vtSig  = vhsName.substring(14);
-        var vtSigIndex = VaporTokenNames.indexOf(vtSig);
-        var vtSigValue = Math.pow(2, vtSigIndex)
-
-        const newShDatumObject = VaporizeShDatum(vaporizerPkh, vaporizeOrders, vaporizeDeliveries + vtSigValue) as PlutusDataObject;
-        const newShDatum = ToPlutusData(newShDatumObject) as PlutusData;
-        const newShDatumHash = Cardano.hash_plutus_data(newShDatum);
-        const shTokenOut = GetOutputFromChainData(VaporizeContractAddress() as Address, shUtxo) as TransactionOutput
-        shTokenOut.set_data_hash(newShDatumHash);
+        const refundOutput = Cardano.TransactionOutput.new(
+            Cardano.Address.from_bech32(ownerBech32Address),
+            orderInputUtxo.output().amount().checked_sub(Cardano.Value.new(Cardano.BigNum.from_str(VAPORIZER_FEE.toString())))
+        );
 
         const outputs: TransactionOutput[] = [
-            shTokenOut,
-            Cardano.TransactionOutput.new(
-                Cardano.Address.from_bech32(vaporizerAddr),
-                GetHypeNftsOutput([toHex(Buffer.from(vhsName, "ascii"))]) as Value
-            )
+            refundOutput
         ];
 
         const transactionOutputs = Cardano.TransactionOutputs.new();
+
+        const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
+        transactionOutputs.add(
+            Cardano.TransactionOutput.new(
+                selfAddress,
+                Cardano.Value.new(Cardano.BigNum.from_str("5000000"))
+            )
+        );
 
         outputs.forEach(output => transactionOutputs.add(output));
 
@@ -2120,21 +2202,16 @@ async function VaporizeDeliverAsync(vhsName: string, vaporizerAddr: string, shUt
 
         outputs.forEach(output => txBuilder.add_output(output));
 
-        const requiredSigners = Cardano.Ed25519KeyHashes.new();
-        requiredSigners.add(baseAddress.payment_cred().to_keyhash() as Ed25519KeyHash);
-        txBuilder.set_required_signers(requiredSigners);
-
-        const shDatumObject = VaporizeShDatum(vaporizerPkh, vaporizeOrders, vaporizeDeliveries) as PlutusDataObject;   
-        const shDatum = ToPlutusData(shDatumObject) as PlutusData;
+        const orderDatumObject = VaporizeOrderDatum(orderUtxo.Fields[0].Value as string) as PlutusDataObject;
+        const orderDatum = ToPlutusData(orderDatumObject) as PlutusData;
 
         const datumList = Cardano.PlutusList.new();
-        datumList.add(shDatum);
-        datumList.add(newShDatum);
+        datumList.add(orderDatum);
 
         const redeemers = Cardano.Redeemers.new();
 
-        const scriptInputIndex = txBuilder.index_of_input(scriptUtxos[0].input());
-        redeemers.add(VaporizeDeliverRedeemer(scriptInputIndex) as Redeemer);
+        const orderUtxoScriptInputIndex = txBuilder.index_of_input(orderInputUtxo.input());
+        redeemers.add(VaporizeRefundRedeemer(orderUtxoScriptInputIndex) as Redeemer);
 
         txBuilder.set_plutus_scripts(VaporizeContractScript() as PlutusScripts);
         txBuilder.set_plutus_data(Cardano.PlutusList.from_bytes(datumList.to_bytes()));
@@ -2178,10 +2255,307 @@ async function VaporizeDeliverAsync(vhsName: string, vaporizerAddr: string, shUt
 
         console.log("full tx size", signedTx.to_bytes().length);
         console.log("submitting tx");
+        // const result = await window.cardano.submitTx(toHex(signedTx.to_bytes()));
+        // console.log(result);
+        await hsVaporSignalRConnection.send("SubmitVaporizeTx", toHex(signedTx.to_bytes()), []);
+    }
+}
+
+async function VaporizeDeliverAsync(vhsName: string, shUtxo: CardanoChainData) {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+        console.log("sh utxo", shUtxo);
+
+        setCoinSelectionCardanoSerializationLib(Cardano);
+        const protocolParameters = await GetProtocolProtocolParamsAsync();
+        CoinSelection.setProtocolParameters(
+            protocolParameters.min_utxo.toString(),
+            protocolParameters.min_fee_a.toString(),
+            (protocolParameters.min_fee_b + 50_000).toString(),
+            protocolParameters.max_tx_size.toString()
+        );
+
+        const txBuilder = await CreateTransactionBuilderAsync() as TransactionBuilder;
+        const transactionWitnessSet = Cardano.TransactionWitnessSet.new();
+
+        const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
+        const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
+        
+        const scriptUtxos = [
+            Cardano.TransactionUnspentOutput.new(
+                Cardano.TransactionInput.new(
+                    Cardano.TransactionHash.from_bytes(fromHex(shUtxo.TxId)), 
+                    shUtxo.TxIdx
+                ),
+                GetOutputFromChainData(VaporizeContractAddress() as Address, shUtxo) as TransactionOutput
+            )
+        ]
+
+        var ownerPkh = GetVaporizeOrderPkh(shUtxo);
+        var skullVaporOrders = GetVaporizeOrderList(shUtxo);
+        var skullVaporDeliveries = GetVaporizeDeliveryList(shUtxo);
+
+        var vtSig  = vhsName.substring(14);
+        var vtSigIndex = VaporTokenNames.indexOf(vtSig);
+        var vtSigValue = Math.pow(2, vtSigIndex)
+
+        const newShDatumObject = VaporizeShDatum(ownerPkh, skullVaporOrders, skullVaporDeliveries + vtSigValue) as PlutusDataObject;
+        const newShDatum = ToPlutusData(newShDatumObject) as PlutusData;
+        const newShDatumHash = Cardano.hash_plutus_data(newShDatum);
+        const shTokenOut = GetOutputFromChainData(VaporizeContractAddress() as Address, shUtxo) as TransactionOutput
+        shTokenOut.set_data_hash(newShDatumHash);
+
+        const ownerBech32Address = await GetOwnerAddressAsync(shUtxo.TxId);
+
+        const outputs: TransactionOutput[] = [
+            shTokenOut,
+            Cardano.TransactionOutput.new(
+                Cardano.Address.from_bech32(ownerBech32Address),
+                GetHypeNftsOutput([toHex(Buffer.from(vhsName, "ascii"))]) as Value
+            )
+        ];
+
+        const transactionOutputs = Cardano.TransactionOutputs.new();
+        transactionOutputs.add(
+            Cardano.TransactionOutput.new(
+                selfAddress,
+                Cardano.Value.new(Cardano.BigNum.from_str("5000000"))
+            )
+        );
+
+        outputs.forEach(output => transactionOutputs.add(output));
+
+        const utxos = await window.cardano.getUtxos();
+        const csResult = CoinSelection.randomImprove(
+            utxos.map(utxo => Cardano?.TransactionUnspentOutput.from_bytes(fromHex(utxo)) as TransactionUnspentOutput),
+            transactionOutputs,
+            8,
+            scriptUtxos
+        );
+
+        csResult.inputs.forEach((utxo) => {
+            txBuilder.add_input(
+                utxo.output().address(),
+                utxo.input(),
+                utxo.output().amount()
+            );
+        });
+
+        outputs.forEach(output => txBuilder.add_output(output));
+
+        const requiredSigners = Cardano.Ed25519KeyHashes.new();
+        requiredSigners.add(baseAddress.payment_cred().to_keyhash() as Ed25519KeyHash);
+        txBuilder.set_required_signers(requiredSigners);
+
+        const shDatumObject = VaporizeShDatum(ownerPkh, skullVaporOrders, skullVaporDeliveries) as PlutusDataObject;   
+        const shDatum = ToPlutusData(shDatumObject) as PlutusData;
+
+        const datumList = Cardano.PlutusList.new();
+        datumList.add(shDatum);
+        datumList.add(newShDatum);
+
+        const redeemers = Cardano.Redeemers.new();
+
+        const scriptInputIndex = txBuilder.index_of_input(scriptUtxos[0].input());
+        redeemers.add(VaporizeDeliverRedeemer(scriptInputIndex) as Redeemer);
+
+        txBuilder.set_plutus_scripts(VaporizeContractScript() as PlutusScripts);
+        txBuilder.set_plutus_data(Cardano.PlutusList.from_bytes(datumList.to_bytes()));
+        txBuilder.set_redeemers(Cardano.Redeemers.from_bytes(redeemers.to_bytes()));
+
+        transactionWitnessSet.set_plutus_scripts(VaporizeContractScript() as PlutusScripts);
+        transactionWitnessSet.set_plutus_data(Cardano.PlutusList.from_bytes(datumList.to_bytes()));
+        transactionWitnessSet.set_redeemers(Cardano.Redeemers.from_bytes(redeemers.to_bytes()));
+
+        const collateralUnspentTransactions = (await GetCollateralUnspentTransactionOutputAsync()) as TransactionUnspentOutput[];
+        const collateralInputs = Cardano.TransactionInputs.new();
+        collateralUnspentTransactions.forEach(c => collateralInputs.add(c.input()));
+        txBuilder.set_collateral(collateralInputs);
+        txBuilder.add_change_if_needed(selfAddress);
+
+        const txBody = txBuilder.build();
+
+        const generalMetadata = Cardano.GeneralTransactionMetadata.new();
+        generalMetadata.insert(
+            Cardano.BigNum.from_str("7283"),
+            Cardano.encode_json_str_to_metadatum(JSON.stringify({
+                pkh: ownerPkh,
+                "address": [
+                    ownerBech32Address.slice(0,64),
+                    ownerBech32Address.substring(64)
+                ],
+                "skullName": vhsName.slice(0,13),
+                "vaporName": `HYPESKULLS_VT_${vhsName.substring(14)}`,
+                "action": VaporizeAction.Deliver
+            }), 0)
+        );
+
+        let auxiliaryData = Cardano.AuxiliaryData.new();
+        auxiliaryData.set_metadata(generalMetadata)
+        txBody.set_auxiliary_data_hash(Cardano.hash_auxiliary_data(
+            Cardano.AuxiliaryData.from_bytes(auxiliaryData.to_bytes())
+        ));
+
+        const transaction = Cardano.Transaction.new(
+            Cardano.TransactionBody.from_bytes(txBody.to_bytes()),
+            Cardano.TransactionWitnessSet.from_bytes(
+                transactionWitnessSet.to_bytes()
+            ),
+            Cardano.AuxiliaryData.from_bytes(auxiliaryData.to_bytes())
+        );
+
+        const serializedTx = toHex(transaction.to_bytes());
+
+        const txVkeyWitnesses = await window.cardano.signTx(serializedTx, true);
+
+        let signedtxVkeyWitnesses = Cardano.TransactionWitnessSet.from_bytes(
+            fromHex(txVkeyWitnesses)
+        );
+
+        transactionWitnessSet.set_vkeys(signedtxVkeyWitnesses.vkeys() as Vkeywitnesses);
+
+        const signedTx = Cardano.Transaction.new(
+            Cardano.TransactionBody.from_bytes(txBody.to_bytes()),
+            Cardano.TransactionWitnessSet.from_bytes(
+                transactionWitnessSet.to_bytes()
+            ),
+            Cardano.AuxiliaryData.from_bytes(auxiliaryData.to_bytes())
+        );
+
+        console.log("full tx size", signedTx.to_bytes().length);
+        console.log("submitting tx");
         // var result = await window.cardano.submitTx(toHex(signedTx.to_bytes()));
         // console.log(result);
         await hsVaporSignalRConnection.send("SubmitVaporizeTx", toHex(signedTx.to_bytes()), 
         [newShDatumObject]);
+    }
+}
+
+async function VaporizeWithdrawAsync(utxo: CardanoChainData, datum: PlutusData) {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+        console.log("utxo", utxo);
+
+        setCoinSelectionCardanoSerializationLib(Cardano);
+        const protocolParameters = await GetProtocolProtocolParamsAsync();
+        CoinSelection.setProtocolParameters(
+            protocolParameters.min_utxo.toString(),
+            protocolParameters.min_fee_a.toString(),
+            (protocolParameters.min_fee_b + 50_000).toString(),
+            protocolParameters.max_tx_size.toString()
+        );
+
+        const txBuilder = await CreateTransactionBuilderAsync() as TransactionBuilder;
+        const transactionWitnessSet = Cardano.TransactionWitnessSet.new();
+
+        const selfAddress = Cardano.Address.from_bytes(fromHex(await GetWalletAddressAsync()));
+        const baseAddress = Cardano.BaseAddress.from_address(selfAddress) as BaseAddress;
+        
+        const scriptUtxo = Cardano.TransactionUnspentOutput.new(
+            Cardano.TransactionInput.new(
+                Cardano.TransactionHash.from_bytes(fromHex(utxo.TxId)), 
+                utxo.TxIdx
+            ),
+            GetOutputFromChainData(VaporizeContractAddress() as Address, utxo) as TransactionOutput
+        );
+
+        const scriptUtxos = [
+            scriptUtxo
+        ];
+
+        const withdrawOut = Cardano.TransactionOutput.new(
+            selfAddress,
+            scriptUtxo.output().amount()
+        );
+
+        const outputs: TransactionOutput[] = [
+            withdrawOut
+        ];
+
+        const transactionOutputs = Cardano.TransactionOutputs.new();
+        transactionOutputs.add(
+            Cardano.TransactionOutput.new(
+                selfAddress,
+                Cardano.Value.new(Cardano.BigNum.from_str("5000000"))
+            )
+        );
+
+        outputs.forEach(output => transactionOutputs.add(output));
+
+        const utxos = await window.cardano.getUtxos();
+        const csResult = CoinSelection.randomImprove(
+            utxos.map(utxo => Cardano?.TransactionUnspentOutput.from_bytes(fromHex(utxo)) as TransactionUnspentOutput),
+            transactionOutputs,
+            8,
+            scriptUtxos
+        );
+
+        csResult.inputs.forEach((utxo) => {
+            txBuilder.add_input(
+                utxo.output().address(),
+                utxo.input(),
+                utxo.output().amount()
+            );
+        });
+
+        outputs.forEach(output => txBuilder.add_output(output));
+
+        const requiredSigners = Cardano.Ed25519KeyHashes.new();
+        requiredSigners.add(baseAddress.payment_cred().to_keyhash() as Ed25519KeyHash);
+        txBuilder.set_required_signers(requiredSigners);
+
+        const datumList = Cardano.PlutusList.new();
+        datumList.add(datum);
+
+        const redeemers = Cardano.Redeemers.new();
+
+        const scriptInputIndex = txBuilder.index_of_input(scriptUtxo.input());
+        redeemers.add(VaporizeWithdrawRedeemer(scriptInputIndex) as Redeemer);
+
+        txBuilder.set_plutus_scripts(VaporizeContractScript() as PlutusScripts);
+        txBuilder.set_plutus_data(Cardano.PlutusList.from_bytes(datumList.to_bytes()));
+        txBuilder.set_redeemers(Cardano.Redeemers.from_bytes(redeemers.to_bytes()));
+
+        transactionWitnessSet.set_plutus_scripts(VaporizeContractScript() as PlutusScripts);
+        transactionWitnessSet.set_plutus_data(Cardano.PlutusList.from_bytes(datumList.to_bytes()));
+        transactionWitnessSet.set_redeemers(Cardano.Redeemers.from_bytes(redeemers.to_bytes()));
+
+        const collateralUnspentTransactions = (await GetCollateralUnspentTransactionOutputAsync()) as TransactionUnspentOutput[];
+        const collateralInputs = Cardano.TransactionInputs.new();
+        collateralUnspentTransactions.forEach(c => collateralInputs.add(c.input()));
+        txBuilder.set_collateral(collateralInputs);
+        txBuilder.add_change_if_needed(selfAddress);
+
+        const txBody = txBuilder.build();
+        const transaction = Cardano.Transaction.new(
+            Cardano.TransactionBody.from_bytes(txBody.to_bytes()),
+            Cardano.TransactionWitnessSet.from_bytes(
+                transactionWitnessSet.to_bytes()
+            )
+        );
+
+        const serializedTx = toHex(transaction.to_bytes());
+
+        const txVkeyWitnesses = await window.cardano.signTx(serializedTx, true);
+
+        let signedtxVkeyWitnesses = Cardano.TransactionWitnessSet.from_bytes(
+            fromHex(txVkeyWitnesses)
+        );
+
+        transactionWitnessSet.set_vkeys(signedtxVkeyWitnesses.vkeys() as Vkeywitnesses);
+
+        const signedTx = Cardano.Transaction.new(
+            Cardano.TransactionBody.from_bytes(txBody.to_bytes()),
+            Cardano.TransactionWitnessSet.from_bytes(
+                transactionWitnessSet.to_bytes()
+            )
+        );
+
+        console.log("full tx size", signedTx.to_bytes().length);
+        console.log("submitting tx");
+        // var result = await window.cardano.submitTx(toHex(signedTx.to_bytes()));
+        // console.log(result);
+        await hsVaporSignalRConnection.send("SubmitVaporizeTx", toHex(signedTx.to_bytes()), []);
     }
 }
 
@@ -2493,7 +2867,7 @@ const VaporizeOrderRedeemer = (index: number) => {
             toBigNum(index),
             redeemerData,
             Cardano.ExUnits.new(
-                Cardano.BigNum.from_str("9000000"),
+                Cardano.BigNum.from_str("5000000"),
                 Cardano.BigNum.from_str("4000000000")
             )
         )
@@ -2515,7 +2889,7 @@ const VaporizeUpdateShRedeemer = (index: number) => {
             toBigNum(index),
             redeemerData,
             Cardano.ExUnits.new(
-                Cardano.BigNum.from_str("7000000"),
+                Cardano.BigNum.from_str("6000000"),
                 Cardano.BigNum.from_str("4000000000")
             )
         )
@@ -2537,8 +2911,30 @@ const VaporizeUsePtRedeemer = (index: number) => {
             toBigNum(index),
             redeemerData,
             Cardano.ExUnits.new(
-                Cardano.BigNum.from_str("2000000"),
+                Cardano.BigNum.from_str("3000000"),
                 Cardano.BigNum.from_str("2000000000")
+            )
+        )
+    }
+}
+
+const VaporizeRefundRedeemer = (index: number) => {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+        const redeemerData = Cardano.PlutusData.new_constr_plutus_data(
+            Cardano.ConstrPlutusData.new(
+                Cardano.Int.new_i32(3),
+                Cardano.PlutusList.new()
+            )
+        );
+
+        return Cardano.Redeemer.new(
+            Cardano.RedeemerTag.new_spend(),
+            toBigNum(index),
+            redeemerData,
+            Cardano.ExUnits.new(
+                Cardano.BigNum.from_str("10000000"),
+                Cardano.BigNum.from_str("5000000000")
             )
         )
     }
@@ -2549,7 +2945,29 @@ const VaporizeDeliverRedeemer = (index: number) => {
     if (Cardano !== null) {
         const redeemerData = Cardano.PlutusData.new_constr_plutus_data(
             Cardano.ConstrPlutusData.new(
-                Cardano.Int.new_i32(1),
+                Cardano.Int.new_i32(4),
+                Cardano.PlutusList.new()
+            )
+        );
+
+        return Cardano.Redeemer.new(
+            Cardano.RedeemerTag.new_spend(),
+            toBigNum(index),
+            redeemerData,
+            Cardano.ExUnits.new(
+                Cardano.BigNum.from_str("9000000"),
+                Cardano.BigNum.from_str("7000000000")
+            )
+        )
+    }
+}
+
+const VaporizeWithdrawRedeemer = (index: number) => {
+    let Cardano = CardanoSerializationLib();
+    if (Cardano !== null) {
+        const redeemerData = Cardano.PlutusData.new_constr_plutus_data(
+            Cardano.ConstrPlutusData.new(
+                Cardano.Int.new_i32(5),
                 Cardano.PlutusList.new()
             )
         );
@@ -2610,7 +3028,18 @@ const GetOutputFromChainData = (addr: Address, chainData: CardanoChainData, extr
 }
 
 const VaporTokenPrefix = "HYPESKULLS_VT_";
-const VaporTokenNames = ["AD_C","AD_E","AD_EE","AN_C","AN_E","AN_EE","G_C","G_E","G_EE","K_C","K_E","K_EE","M_C","M_E","M_EE","N_C","N_E","N_EE","P_C","P_E","P_EE","R_C","R_E","R_EE","V_C","V_E","V_EE","Z_C","Z_E","Z_EE"];
+const VaporTokenNames = [
+    "AD_C","AD_E","AD_EE",
+    "AC_C","AC_E","AC_EE",
+    "G_C","G_E","G_EE",
+    "K_C","K_E","K_EE",
+    "M_C","M_E","M_EE",
+    "N_C","N_E","N_EE",
+    "P_C","P_E","P_EE",
+    "R_C","R_E","R_EE",
+    "V_C","V_E","V_EE",
+    "Z_C","Z_E","Z_EE"
+];
 const GetWalletAddressAsync = async () => (await window.cardano.getUsedAddresses())[0];
 const toHex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
 const asciiToHex = (str: string) => Buffer.from(str, "ascii").toString("hex");
